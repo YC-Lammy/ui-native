@@ -2,21 +2,21 @@ extern crate alloc;
 
 mod app;
 mod context;
+pub mod custom;
 mod native_tree;
 mod shadow_tree;
 pub mod state;
 pub mod style;
 pub mod widget;
-pub mod custom;
 
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 pub mod linux;
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 use linux as imp;
 
-#[cfg(target_family="wasm")]
+#[cfg(target_family = "wasm")]
 pub mod web;
-#[cfg(target_family="wasm")]
+#[cfg(target_family = "wasm")]
 use web as imp;
 
 use alloc::boxed::Box;
@@ -50,7 +50,7 @@ mod private {
     pub trait NativeElement {
         fn on_state_change(&mut self, ctx: &Context);
         fn render(&mut self);
-        fn core_component(&self) -> CoreComponent;
+        fn core_component(&mut self) -> CoreComponent;
     }
 
     pub trait ElementLike: 'static {

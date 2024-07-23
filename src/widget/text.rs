@@ -26,7 +26,7 @@ impl NativeElement for Text {
         // do nothing
     }
 
-    fn core_component(&self) -> crate::shadow_tree::component::CoreComponent {
+    fn core_component(&mut self) -> crate::shadow_tree::component::CoreComponent {
         CoreComponent::Text(Box::new(self.tree_node.clone()))
     }
 

@@ -2,35 +2,38 @@ use std::{any::Any, sync::Arc};
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::{custom::CustomElementWrapper, private::ElementLike, style::StyleSheetID};
+use crate::custom::CustomElementWrapper;
+use  crate::private::ElementLike;
+use crate::style::StyleSheet;
 
 use super::NodeID;
 
 #[derive(Default, Clone)]
 pub struct ViewNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub children: Vec<CoreComponent>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct ImageViewNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub src: (),
 }
 
 #[derive(Default, Clone)]
 pub struct ScrollViewNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
-    pub children: Vec<CoreComponent>,
+    pub style: Arc<StyleSheet>,
+    pub child: Option<CoreComponent>,
+
 }
 
 #[derive(Default, Clone)]
 pub struct ButtonNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub title: String,
     pub disabled: bool,
     pub on_click: Option<Arc<dyn Fn() + Send + Sync + 'static>>,
@@ -39,14 +42,14 @@ pub struct ButtonNode {
 #[derive(Debug, Default, Clone)]
 pub struct TextNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub text: String,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct TextInputNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub background_text: Option<String>,
 }
 
@@ -68,7 +71,7 @@ impl Default for StackNavigaterScreenOptions {
 #[derive(Default, Clone)]
 pub struct StackNavigaterNode {
     pub id: NodeID,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub commands: Vec<NavigatorCommand>,
     /// the component of each screen
     pub children: Vec<CoreComponent>,
@@ -77,18 +80,18 @@ pub struct StackNavigaterNode {
 }
 
 #[derive(Clone)]
-pub struct FlatListNode{
+pub struct FlatListNode {
     pub id: Option<NodeID>,
-    pub style: StyleSheetID,
+    pub style: Arc<StyleSheet>,
     pub get_item: Arc<dyn Fn(usize) -> Box<dyn Any> + Send + Sync>,
     pub get_len: Arc<dyn Fn() -> usize + Sync + Send>,
-    pub render: Arc<dyn Fn(Box<dyn Any>) -> Box<dyn ElementLike> + Sync + Send>
+    pub render: Arc<dyn Fn(Box<dyn Any>) -> Box<dyn ElementLike> + Sync + Send>,
 }
 
 #[derive(Clone)]
-pub struct CustomNode{
+pub struct CustomNode {
     pub id: Option<NodeID>,
-    pub wrapper: CustomElementWrapper
+    pub(crate) wrapper: CustomElementWrapper,
 }
 
 #[derive(Debug)]
@@ -101,7 +104,7 @@ pub enum CoreComponentType {
     TextInput,
     StackNavigator,
     FlatList,
-    Custom
+    Custom,
 }
 
 #[derive(Clone)]
@@ -116,12 +119,12 @@ pub enum CoreComponent {
 
     FlatList(Box<FlatListNode>),
 
-    Custom(Box<CustomNode>)
+    Custom(Box<CustomNode>),
 }
 
 impl CoreComponent {
-    pub fn ty(&self) -> CoreComponentType{
-        match self{
+    pub fn ty(&self) -> CoreComponentType {
+        match self {
             Self::View(_) => CoreComponentType::View,
             Self::ImageView(_) => CoreComponentType::ImageView,
             Self::ScrollView(_) => CoreComponentType::ScrollView,
@@ -150,20 +153,34 @@ impl CoreComponent {
     pub fn child_mut(&mut self) -> &mut [CoreComponent] {
         match self {
             Self::View(v) => &mut v.children,
-            Self::ScrollView(v) => &mut v.children,
+            Self::ScrollView(v) => match &mut v.child{
+                Some(c) => core::slice::from_mut(c),
+                None => &mut []
+            },
             Self::StackNavigator(s) => &mut s.children,
             Self::Custom(c) => c.wrapper.children_mut(),
-            Self::ImageView(_) | Self::Button(_) | Self::Text(_) | Self::TextInput(_) | Self::FlatList(_) => &mut [],
+            Self::ImageView(_)
+            | Self::Button(_)
+            | Self::Text(_)
+            | Self::TextInput(_)
+            | Self::FlatList(_) => &mut [],
         }
     }
 
     pub fn child(&self) -> &[CoreComponent] {
         match self {
             Self::View(v) => &v.children,
-            Self::ScrollView(v) => &v.children,
+            Self::ScrollView(v) => match &v.child{
+                Some(c) => core::slice::from_ref(c),
+                None => &mut []
+            },
             Self::StackNavigator(s) => &s.children,
             Self::Custom(c) => c.wrapper.children(),
-            Self::ImageView(_) | Self::Button(_) | Self::Text(_) | Self::TextInput(_) | Self::FlatList(_) => &mut [],
+            Self::ImageView(_)
+            | Self::Button(_)
+            | Self::Text(_)
+            | Self::TextInput(_)
+            | Self::FlatList(_) => &mut [],
         }
     }
 }

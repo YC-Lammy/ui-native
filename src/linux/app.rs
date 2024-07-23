@@ -73,16 +73,21 @@ impl GtkApp {
         let height = self.height;
         let title = self.title;
 
-        let root_view = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        // the root view is a workaround to show excess content
+        // and allows the window to shrink below its content
+        let root_view = gtk4::ScrolledWindow::new();
 
         root_view.set_hexpand(true);
         root_view.set_vexpand(true);
 
+        // clone reference to root view
         let cloned_root_view = root_view.clone();
 
+        // create cell to store the window
         let window = Rc::new(RefCell::new(None));
         let cloned_window = window.clone();
 
+        // create and initialise the window when app is active
         self.app.connect_activate(move |app| {
             // create new window
             let window = ApplicationWindow::builder()
@@ -98,9 +103,11 @@ impl GtkApp {
             // present the window
             window.present();
 
+            // store the window in cell
             cloned_window.borrow_mut().replace(window);
         });
 
+        // clone app inner
         let app_inner = self.inner.clone();
 
         // create new thread for rendering
@@ -110,22 +117,28 @@ impl GtkApp {
 
             // indefinite loop for rendering
             loop {
-                
                 // call on active
                 let mut widget = on_active(&ctx);
 
+                // a global state change
                 if GLOBAL_STATE_CHANGED.load(Ordering::SeqCst) {
                     widget.on_state_change(&Context::new())
                 }
+
                 // render the widget
                 let mut elem = widget.render();
 
+                // get the native component from the rendered element
                 let mut comp = loop {
                     match elem {
+                        // element is not native
                         Err(mut e) => {
+                            // keep rendering the element
                             elem = e.render();
                         }
+                        // element is native
                         Ok(c) => {
+                            // return the native component
                             break c;
                         }
                     }
@@ -183,29 +196,18 @@ impl GtkApp {
 
                 // get the root view from native tree
                 if let Some(root) = native_tree.get_root_node() {
-                    let root = root.component();
+                    // get the gtk widget
+                    let widget = root.widget().as_gtk4_widget();
 
-                    if let Some(c) = root_view.first_child() {
-                        // if the child is not the same object,
-                        // the new child must be mounted
-                        if !c.eq(root.widget().as_gtk4_widget()) {
-                            // remove all the child
-                            while let Some(c) = root_view.first_child() {
-                                root_view.remove(&c);
-                            }
-                            // add root widget
-                            root_view.append(root.widget().as_gtk4_widget());
-                        }
-                        // other wise the root has the same object
-                    } else {
-                        // the root has not been mounted
-                        root_view.append(root.widget().as_gtk4_widget());
+                    if let Some(w) = root_view.child(){
+                        if &w != widget{
+                            root_view.set_child(Some(widget))
+                        } 
+                    } else{
+                        root_view.set_child(Some(root.widget().as_gtk4_widget()));
                     }
                 } else {
-                    // remove all the child
-                    while let Some(c) = root_view.first_child() {
-                        root_view.remove(&c);
-                    }
+                    root_view.set_child_visible(false);
                 }
             }
 

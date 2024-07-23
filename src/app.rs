@@ -9,10 +9,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn builder() -> AppBuilder{
+    pub fn builder() -> AppBuilder {
         AppBuilder::new()
     }
-    
+
     pub fn launch<T, F>(self, on_active: F)
     where
         F: Fn(&Context) -> T + Send + Sync + 'static,

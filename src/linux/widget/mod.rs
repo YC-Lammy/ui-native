@@ -1,18 +1,20 @@
-
+pub mod button;
 pub mod text;
 pub mod view;
-pub mod button;
+pub mod image_view;
+pub mod scroll_view;
 
-pub mod list_model;
 pub mod flat_list;
-
+pub mod list_model;
 
 use std::any::Any;
 
-pub use view::NativeView;
 pub use button::NativeButton;
-pub use text::NativeText;
 pub use flat_list::NativeFlatList;
+pub use text::NativeText;
+pub use view::NativeView;
+pub use image_view::NativeImageView;
+pub use scroll_view::NativeScrollView;
 
 pub trait NativeElement: Any {
     fn as_gtk4_widget(&self) -> &gtk4::Widget;

@@ -1,0 +1,5 @@
+
+
+[build]
+#target = "aarch64-linux-android"
+#target = "wasm32-wasi"

@@ -4,7 +4,7 @@ use crate::style::Colour;
 
 use crate::imp::NativeElement;
 
-pub trait NativeButtonImp: NativeElement{
+pub trait NativeButtonImp: NativeElement {
     fn new() -> Self;
     fn set_width(&self, width: f32);
     fn set_height(&self, height: f32);
@@ -14,7 +14,7 @@ pub trait NativeButtonImp: NativeElement{
     fn set_on_click(&self, on_click: Option<Arc<dyn Fn() + Send + Sync>>);
 }
 
-pub trait NativeViewImp: NativeElement{
+pub trait NativeViewImp: NativeElement {
     fn new() -> Self;
     fn set_width(&self, width: f32);
     fn set_height(&self, height: f32);
@@ -24,20 +24,37 @@ pub trait NativeViewImp: NativeElement{
     fn remove_child(&self, elem: &dyn NativeElement);
 }
 
-pub trait NativeImageViewImp: NativeElement{
+pub trait NativeImageViewImp: NativeElement {
     fn new() -> Self;
     fn set_width(&self, width: f32);
     fn set_height(&self, height: f32);
+    fn get_width(&self) -> f32;
+    fn get_height(&self) -> f32;
     fn set_visible(&self, visible: bool);
     fn set_source(&self);
 }
 
-pub trait NativeTextImp: NativeElement{
+pub trait NativeScrollViewImp: NativeElement{
+    fn new() -> Self;
+    fn set_width(&self, width: f32);
+    fn set_height(&self, heigth: f32);
+    fn set_child(&self, child: &dyn NativeElement);
+    fn remove_child(&self);
+    fn scroll_to_horizontal(&self, location: f64);
+    fn scroll_to_vertical(&self, location: f64);
+    fn set_horizontal_scrollable(&self, scrollable: bool);
+    fn set_vertical_scrollable(&self, scrollable: bool);
+    fn horizontal_scroll_location(&self) -> f64;
+    fn vertical_scroll_location(&self) -> f64;
+}
+
+pub trait NativeTextImp: NativeElement {
     fn new(text: &str) -> Self;
     fn set_width(&self, width: f32);
     fn set_height(&self, height: f32);
     fn get_width(&self) -> f32;
     fn get_height(&self) -> f32;
+    fn set_visible(&self, visible: bool);
     fn set_text(&self, text: &str);
     fn set_colour(&self, colour: Colour);
     fn set_background_colour(&self, colour: Colour);

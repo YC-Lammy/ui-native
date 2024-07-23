@@ -1,8 +1,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use crate::{custom::NativeCustomElement, style::StyleSheetID};
 use crate::private::ElementLike;
+use crate::custom::NativeCustomElement;
+use crate::style::StyleSheet;
 
 use super::{component::NavigatorCommand, NodeID};
 
@@ -17,13 +18,13 @@ pub enum Command {
     },
 
     SetStyle{
-        id: NodeID,
-        style: StyleSheetID
+        node: NodeID,
+        style: Arc<StyleSheet>
     },
 
-    ViewCreate{
+    ViewCreate {
         id: NodeID,
-        style: StyleSheetID
+        style: Arc<StyleSheet>,
     },
     /// add or replace child at index
     ViewSetChild {
@@ -38,116 +39,126 @@ pub enum Command {
         index: usize,
     },
 
-    CreateImageView(NodeID),
-    CreateScrollView(NodeID),
+    ImageViewCreate{
+        id: NodeID,
+        style: Arc<StyleSheet>,
+    },
+
+    ScrollViewCreate{
+        id: NodeID,
+        style: Arc<StyleSheet>,
+    },
+    ScrollViewRemoveChild{
+        id: NodeID
+    },
+    ScrollViewSetChild{
+        id: NodeID,
+        child: NodeID
+    },
 
     ///////////////////////////////////////
     /////////   Button commands   /////////
     ///////////////////////////////////////
-    
-    ButtonCreate{
+    ButtonCreate {
         id: NodeID,
-        style: StyleSheetID,
+        style: Arc<StyleSheet>,
     },
-    ButtonSetLabelText{
+    ButtonSetLabelText {
         id: NodeID,
-        label: String
+        label: String,
     },
-    ButtonSetOnClick{
+    ButtonSetOnClick {
         id: NodeID,
-        on_click: Option<Arc<dyn Fn() + Send + Sync>>
+        on_click: Option<Arc<dyn Fn() + Send + Sync>>,
     },
-    ButtonSetDisabled{
+    ButtonSetDisabled {
         id: NodeID,
-        disabled: bool
+        disabled: bool,
     },
 
     /////////////////////////////////////
     /////////   Text commands   /////////
     /////////////////////////////////////
-
-    TextCreate{
+    TextCreate {
         id: NodeID,
-        style: StyleSheetID,
+        style: Arc<StyleSheet>,
         text: String,
     },
-    TextSetText{
+    TextSetText {
         id: NodeID,
         text: String,
     },
-    TextSetFont{
+    TextSetFont {
         id: NodeID,
-        font: String
+        font: String,
     },
 
     ///////////////////////////////////////////
     /////////   Text Input commands   /////////
     ///////////////////////////////////////////
-    
     CreateTextInput(NodeID),
 
-
-    /// create or initialise stack navigator
-    StackNavigatorCreate{
-        id: NodeID,
-        style: StyleSheetID,
-    },
+    
 
     /////////////////////////////////////////
     /////////   flatlist commands   /////////
     /////////////////////////////////////////
-    
-    FlatListCreate{
+    FlatListCreate {
         id: NodeID,
-        style: StyleSheetID,
+        style: Arc<StyleSheet>,
     },
-    FlatListSetGetItem{
+    FlatListSetGetItem {
         id: NodeID,
         /// clousure to get user item
         get_item: Arc<dyn Fn(usize) -> Box<dyn Any> + Send + Sync>,
     },
-    FlatListSetGetLen{
+    FlatListSetGetLen {
         id: NodeID,
         /// clousure to get len
         get_len: Arc<dyn Fn() -> usize + Send + Sync>,
     },
-    FlatListSetRender{
+    FlatListSetRender {
         id: NodeID,
         /// clousure to render item
-        render: Arc<dyn Fn(Box<dyn Any>) -> Box<dyn ElementLike> + Send + Sync>
+        render: Arc<dyn Fn(Box<dyn Any>) -> Box<dyn ElementLike> + Send + Sync>,
     },
-
     
+    /// create or initialise stack navigator
+    StackNavigatorCreate {
+        id: NodeID,
+        style: Arc<StyleSheet>,
+    },
     StackNavigatorCommands {
         node: NodeID,
         commands: Vec<NavigatorCommand>,
     },
 
-    CustomCreate{
+    CustomCreate {
         id: NodeID,
-        build_fn: Arc<dyn Fn() -> Box<dyn NativeCustomElement> + Send + Sync>
+        style: Arc<StyleSheet>,
+        build_fn: Arc<dyn Fn() -> Box<dyn NativeCustomElement> + Send + Sync>,
     },
-    CustomCommitChanges{
+    CustomCommitChanges {
         id: NodeID,
-        changes: Box<dyn Any + Send + Sync>
-    }
+        changes: Box<dyn Any + Send + Sync>,
+    },
 }
 
-impl std::fmt::Debug for Command{
+impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let args = match self{
+        let args = match self {
             Self::MountRoot { .. } => format!("mount root"),
             Self::ButtonCreate { .. } => format!("button create"),
             Self::ButtonSetDisabled { .. } => format!("button set disabled"),
             Self::ButtonSetLabelText { .. } => format!("button set label text"),
             Self::ButtonSetOnClick { .. } => format!("button set on click"),
             Self::ViewCreate { .. } => format!("view create"),
-            Self::ViewSetChild{ index, .. } => format!("view set child {{ index:{} }}", index),
+            Self::ViewSetChild { index, .. } => format!("view set child {{ index:{} }}", index),
             Self::ViewRemoveChild { .. } => format!("view add child"),
-            Self::TextCreate{ .. } => format!("text create"),
+            Self::TextCreate { .. } => format!("text create"),
             Self::TextSetFont { .. } => format!("text set font"),
             Self::TextSetText { .. } => format!("text set text"),
-            _ => format!("")
+            _ => format!(""),
         };
         f.write_str(&args)
     }

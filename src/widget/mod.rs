@@ -3,6 +3,7 @@ pub mod flatlist;
 pub mod stack_navigator;
 pub mod text;
 pub mod view;
+pub mod scrollview;
 
 pub use button::Button;
 pub use stack_navigator::{StackNavigator, StackNavigatorElement};

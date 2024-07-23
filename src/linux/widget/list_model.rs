@@ -89,12 +89,12 @@ mod imp_item {
 
     impl ObjectImpl for GtkNativeListItem {}
 
-    impl GtkNativeListItem{
-        pub fn get(&self) -> Option<Box<dyn Any>>{
+    impl GtkNativeListItem {
+        pub fn get(&self) -> Option<Box<dyn Any>> {
             self.data.replace(None)
         }
 
-        pub fn get_pos(&self) -> u32{
+        pub fn get_pos(&self) -> u32 {
             self.index.clone().into_inner()
         }
     }
@@ -115,12 +115,12 @@ impl GtkNativeListItem {
         return obj;
     }
 
-    pub fn get_data(&self) -> Option<Box<dyn Any>>{
+    pub fn get_data(&self) -> Option<Box<dyn Any>> {
         let item = imp_item::GtkNativeListItem::from_obj(self);
         item.get()
     }
 
-    pub fn get_position(&self) -> u32{
+    pub fn get_position(&self) -> u32 {
         let item = imp_item::GtkNativeListItem::from_obj(self);
         item.get_pos()
     }

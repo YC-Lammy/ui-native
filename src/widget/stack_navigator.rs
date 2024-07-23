@@ -79,7 +79,7 @@ impl NativeElement for StackNavigatorElement {
             child.on_state_change(ctx)
         }
     }
-    fn core_component(&self) -> CoreComponent {
+    fn core_component(&mut self) -> CoreComponent {
         CoreComponent::StackNavigator(self.tree_node.clone())
     }
     fn render(&mut self) {

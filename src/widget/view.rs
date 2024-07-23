@@ -1,26 +1,25 @@
+use std::sync::Arc;
+
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::private::{ElementLike, NativeElement};
 use crate::shadow_tree::component::{CoreComponent, ViewNode};
-use crate::state::StateLike;
+use crate::style::{StyleSheet, DEFAULT_STYLESHEET_ARC};
 use crate::Context;
-use crate::State;
 
 pub struct View {
-    /// shadow tree
-    tree_node: ViewNode,
-    /// attached states
-    states: Vec<Box<dyn StateLike>>,
+    style: Arc<StyleSheet>,
     children: Vec<Box<dyn ElementLike>>,
+    rendered_children: Vec<CoreComponent>
 }
 
 impl View {
     pub fn new() -> Self {
         Self {
-            tree_node: ViewNode::default(),
-            states: Vec::new(),
+            style: DEFAULT_STYLESHEET_ARC.clone(),
             children: Vec::new(),
+            rendered_children: Vec::new()
         }
     }
     pub fn with_child<T>(mut self, child: T) -> Self
@@ -42,20 +41,13 @@ impl View {
         self.children.push(child)
     }
 
-    pub fn attach_state<T: 'static>(&mut self, state: State<T>) {
-        self.attach_state_dyn(Box::new(state))
+    pub fn with_style(mut self, style: Arc<StyleSheet>) -> Self{
+        self.set_style(style);
+        return self
     }
 
-    fn attach_state_dyn(&mut self, state: Box<dyn StateLike>) {
-        self.states.push(state);
-    }
-
-    pub fn remove_state<T: 'static>(&mut self, state: State<T>) -> bool {
-        let old_len = self.states.len();
-        // remove all same state
-        self.states
-            .retain(|s| !s.is_same_state(unsafe { core::mem::transmute(&state) }));
-        return self.states.len() != old_len;
+    pub fn set_style(&mut self, style: Arc<StyleSheet>){
+        self.style = style;
     }
 }
 
@@ -66,8 +58,16 @@ impl NativeElement for View {
         }
     }
 
-    fn core_component(&self) -> CoreComponent {
-        CoreComponent::View(Box::new(self.tree_node.clone()))
+    fn core_component(&mut self) -> CoreComponent {
+        let children = core::mem::replace(&mut self.rendered_children, Vec::new());
+
+        CoreComponent::View(Box::new(
+            ViewNode{
+                id: None,
+                style: self.style.clone(),
+                children: children
+            }
+        ))
     }
 
     fn render(&mut self) {
@@ -84,7 +84,7 @@ impl NativeElement for View {
                 }
             };
 
-            self.tree_node.children.push(comp);
+            self.rendered_children.push(comp);
         }
     }
 }
@@ -95,35 +95,5 @@ impl ElementLike for View {
     }
     fn as_element(&mut self) -> Option<&mut dyn crate::Element> {
         None
-    }
-}
-
-pub struct ViewBuilder {
-    children: Vec<Box<dyn ElementLike>>,
-    states: Vec<Box<dyn StateLike>>,
-}
-
-impl ViewBuilder {
-    pub fn with_child<T: ElementLike>(&mut self, child: T) -> &mut Self {
-        self.children.push(Box::new(child));
-        self
-    }
-
-    pub fn with_state<T: 'static>(&mut self, state: State<T>) -> &mut Self {
-        self.states.push(Box::new(state));
-        self
-    }
-    pub fn build(self) -> View {
-        let mut view = View::new();
-
-        for child in self.children {
-            view.add_child_dyn(child);
-        }
-
-        for state in self.states {
-            view.attach_state_dyn(state);
-        }
-
-        return view;
     }
 }

@@ -37,7 +37,7 @@ impl NativeElement for Button {
     fn on_state_change(&mut self, _ctx: &crate::Context) {
         // do nothing
     }
-    fn core_component(&self) -> CoreComponent {
+    fn core_component(&mut self) -> CoreComponent {
         CoreComponent::Button(Box::new(self.tree_node.clone()))
     }
     fn render(&mut self) {

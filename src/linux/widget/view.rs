@@ -14,7 +14,7 @@ impl NativeViewImp for NativeView {
             fixed: gtk4::Fixed::new(),
         }
     }
-    
+
     fn set_width(&self, width: f32) {
         self.fixed.set_width_request(width as _);
     }
@@ -29,17 +29,14 @@ impl NativeViewImp for NativeView {
 
     fn insert_child(&self, index: usize, child: &dyn NativeElement) {
         let children = self.fixed.observe_children();
-        if let Some(sibling) = children.item(index as u32){
+        if let Some(sibling) = children.item(index as u32) {
             let sibling = sibling.dynamic_cast_ref::<gtk4::Widget>().unwrap();
 
-            child.as_gtk4_widget().insert_before(
-                &self.fixed, 
-                Some(
-                    sibling
-                )
-            );
+            child
+                .as_gtk4_widget()
+                .insert_before(&self.fixed, Some(sibling));
             self.fixed.remove(sibling);
-        } else{
+        } else {
             self.fixed.put(child.as_gtk4_widget(), 0.0, 0.0);
         }
     }
