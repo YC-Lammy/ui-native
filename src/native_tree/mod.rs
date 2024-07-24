@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use taffy::{Size, TaffyTree};
-
 use crate::custom::NativeCustomElement;
-use crate::imp::{NativeButton, NativeElement, NativeFlatList, NativeText, NativeView, NativeImageView, NativeScrollView};
+use crate::imp::{NativeButton, NativeElement, NativeFlatList, NativeText, NativeView, NativeImageView, NativeScrollView, NativeTextInput};
 use crate::shadow_tree::{command::Command, NodeID};
 use crate::style::StyleSheet;
 
 pub mod traits;
+pub mod layout;
 
 pub use traits::*;
 
@@ -18,7 +17,7 @@ pub enum NativeComponent {
     ScrollView(NativeScrollView),
     Button(NativeButton),
     Text(NativeText),
-    TextInput(),
+    TextInput(NativeTextInput),
     TextEdit(),
     StackNavigator(),
 
@@ -34,6 +33,7 @@ impl NativeComponent {
             Self::ScrollView(s) => s,
             Self::Button(b) => b,
             Self::Text(t) => t,
+            Self::TextInput(t) => t,
             Self::FlatList(f) => f,
             Self::Custom(c) => c.as_native_element(),
             _ => todo!(),
@@ -54,6 +54,7 @@ impl NativeComponent {
             Self::ScrollView(s) => s.set_width(width),
             Self::Button(b) => b.set_width(width),
             Self::Text(t) => t.set_width(width),
+            Self::TextInput(t) => t.set_width(width),
             Self::FlatList(f) => f.set_width(width as _),
             Self::Custom(c) => c.set_custom_width(width),
             _ => todo!(),
@@ -67,6 +68,7 @@ impl NativeComponent {
             Self::ScrollView(s) => s.set_height(height),
             Self::Button(b) => b.set_height(height),
             Self::Text(t) => t.set_height(height as _),
+            Self::TextInput(t) => t.set_height(height),
             Self::FlatList(f) => f.set_height(height as _),
             Self::Custom(c) => c.set_custom_height(height),
             _ => todo!(),
@@ -88,89 +90,6 @@ impl NativeComponent {
             Self::Text(t) => t.set_visible(visible),
             _ => todo!(),
         }
-    }
-}
-
-/// node context is used for temporary storing component for measure function
-struct NodeContext{
-    id: NodeID,
-    comp: Arc<NativeComponent>
-}
-
-fn measure_function(
-    known_dimensions: taffy::Size<Option<f32>>,
-    available_space: taffy::Size<taffy::AvailableSpace>,
-    _id: taffy::NodeId,
-    node_context: Option<&mut NodeContext>,
-    _style: &taffy::Style,
-) -> taffy::Size<f32> {
-    // return the known dimension
-    if let taffy::Size {
-        width: Some(width),
-        height: Some(height),
-    } = known_dimensions
-    {
-        return taffy::Size { width, height };
-    }
-
-    // measure the actual size
-    match node_context {
-        // should not happen
-        None => Size::ZERO,
-        Some(ctx) => match ctx.comp.as_ref() {
-            // text widget
-            NativeComponent::Text(t) => {
-                let mut width = t.get_width() as f32;
-                let mut height = t.get_height() as f32;
-
-                if let taffy::AvailableSpace::Definite(w) = available_space.width {
-                    width = width.min(w);
-                }
-
-                if let taffy::AvailableSpace::Definite(h) = available_space.height {
-                    height = height.min(h);
-                }
-
-                Size {
-                    width: width,
-                    height: height,
-                }
-            }
-            // text edit
-            NativeComponent::TextEdit() => todo!(),
-            // image view
-            NativeComponent::ImageView(i) => {
-                let mut width = i.get_width() as f32;
-                let mut height = i.get_height() as f32;
-
-                if let taffy::AvailableSpace::Definite(w) = available_space.width {
-                    if width > w{
-                        width = w;
-                        i.set_width(w);
-                    }
-                }
-
-                if let taffy::AvailableSpace::Definite(h) = available_space.height {
-                    if height > h{
-                        height = h;
-                        i.set_height(h);
-                    }
-                }
-
-                Size {
-                    width: width,
-                    height: height,
-                }
-            },
-            NativeComponent::Custom(c) => {
-                if let Some((width, height)) = c.measure_custom_size() {
-                    Size { width, height }
-                } else {
-                    Size::ZERO
-                }
-            }
-            _ => Size::ZERO,
-        },
     }
 }
 
@@ -215,109 +134,6 @@ impl NativeTree {
         let id = self.root?;
         let node = self.nodes.get(&id).expect("invalid node id");
         return Some(node.component.clone());
-    }
-
-    /// recompute the layout of the tree
-    pub fn compute_layout(&mut self, width: f64, height: f64) {
-        let mut stretch = TaffyTree::<NodeContext>::new();
-
-        let root = match self.root {
-            Some(r) => r,
-            None => return,
-        };
-
-        // create the root node and its children
-        let root_node = self.create_layout_node(&mut stretch, root);
-
-        // compute the layout
-        stretch
-            .compute_layout_with_measure(
-                root_node,
-                taffy::Size {
-                    width: taffy::AvailableSpace::Definite(width as _),
-                    height: taffy::AvailableSpace::Definite(height as _),
-                },
-                measure_function,
-            )
-            .expect("");
-
-        // assign layout to nodes
-        self.assign_layout(&stretch, root_node);
-    }
-
-    fn create_layout_node(
-        &mut self,
-        stretch: &mut TaffyTree<NodeContext>,
-        node_id: NodeID,
-    ) -> taffy::NodeId {
-        let node = self.nodes.get(&node_id).expect("invalid node id");
-
-        // get the layout
-        let mut style: taffy::Style = node.style.to_taffy_style();
-
-        if node.component.is_scroll_view(){
-            style.overflow = taffy::Point{
-                x: taffy::Overflow::Scroll,
-                y: taffy::Overflow::Scroll
-            };
-        }
-
-        let comp = node.component.clone();
-
-        // create the parent node
-        let id = stretch
-            .new_leaf_with_context(style, NodeContext{id: node_id, comp})
-            .expect("Stretch");
-
-        let children = node.children.clone();
-
-        // add child to node
-        for child_id in children {
-            // create the layout
-            let child_id = self.create_layout_node(stretch, child_id);
-            // add child
-            stretch
-                .add_child(id, child_id)
-                .expect("failed to add child");
-        }
-
-        return id;
-    }
-
-    fn assign_layout<'a>(
-        &mut self,
-        stretch: &'a TaffyTree<NodeContext>,
-        node: taffy::NodeId,
-    ) -> &'a taffy::Layout {
-
-        let context = stretch.get_node_context(node).unwrap();
-
-        let layout = stretch.layout(node).expect("");
-
-        context.comp.set_width(layout.size.width);
-        context.comp.set_height(layout.size.height);
-
-        let mut i = 0;
-        loop{
-            let child = match stretch.child_at_index(node, i){
-                Ok(c) => c,
-                Err(_) => break
-            };
-
-            let child_layout = self.assign_layout(stretch, child);
-
-            // get the child context
-            let child_context = stretch.get_node_context(child).unwrap();
-            // set the child position
-            context.comp.set_child_position(
-                &child_context.comp,
-                 child_layout.location.x, 
-                 child_layout.location.y
-                );
-
-            i += 1;
-        }
-        return layout;
     }
 
     /// aux function to get known button node
@@ -366,6 +182,20 @@ impl NativeTree {
         match self.nodes.get(&id) {
             Some(node) => {
                 if let NativeComponent::Text(t) = node.component.as_ref() {
+                    return (&node, &t);
+                } else {
+                    unreachable!()
+                }
+            }
+            None => unreachable!(),
+        }
+    }
+
+    /// aux function to get known text node
+    fn get_text_input(&self, id: NodeID) -> (&NativeNode, &NativeTextInput) {
+        match self.nodes.get(&id) {
+            Some(node) => {
+                if let NativeComponent::TextInput(t) = node.component.as_ref() {
                     return (&node, &t);
                 } else {
                     unreachable!()
@@ -551,6 +381,23 @@ impl NativeTree {
                 Command::TextSetFont { id, font } => {
                     let (_node, t) = self.get_text(id);
                     t.set_font(&font);
+                }
+
+                Command::TextInputCreate { id, style } => {
+                    // create the input node
+                    self.nodes.insert(
+                        id, 
+                        NativeNode{
+                            parent: None,
+                            children: Vec::new(),
+                            component: Arc::new(NativeComponent::TextInput(NativeTextInput::new())),
+                            style
+                        }
+                    );
+                },
+                Command::TextInputSetBGText { id, text } => {
+                    let (_node, input) = self.get_text_input(id);
+                    input.set_background_text(&text);
                 }
 
                 Command::CustomCreate { id, style, build_fn } => {

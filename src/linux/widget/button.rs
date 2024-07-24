@@ -39,6 +39,12 @@ impl NativeButtonImp for NativeButton {
     fn set_height(&self, height: f32) {
         self.button.set_height_request(height as _);
     }
+    fn get_width(&self) -> f32 {
+        self.button.allocated_width() as f32
+    }
+    fn get_height(&self) -> f32 {
+        self.button.allocated_height() as f32
+    }
 
     fn set_visible(&self, visible: bool) {
         self.button.set_visible(visible)

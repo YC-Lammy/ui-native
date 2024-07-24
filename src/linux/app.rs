@@ -4,10 +4,10 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crossbeam_channel::{Receiver, Sender};
-use gtk4::prelude::{ApplicationExt, ApplicationExtManual, BoxExt, GtkWindowExt, WidgetExt};
+use gtk4::prelude::{ApplicationExt, ApplicationExtManual, GtkWindowExt, WidgetExt};
 use gtk4::ApplicationWindow;
 use parking_lot::RwLock;
+use crossbeam_channel::{Receiver, Sender};
 
 use crate::native_tree::NativeTree;
 use crate::private::ElementLike;
@@ -174,6 +174,8 @@ impl GtkApp {
         // create a new native tree
         let native_tree = NativeTree::get();
 
+        let mut last_child: Option<gtk4::Widget> = None;
+
         // force callback every 18ms
         glib::timeout_add_local(Duration::from_millis(20), move || {
             // has commands been made to tree
@@ -199,12 +201,16 @@ impl GtkApp {
                     // get the gtk widget
                     let widget = root.widget().as_gtk4_widget();
 
-                    if let Some(w) = root_view.child(){
-                        if &w != widget{
-                            root_view.set_child(Some(widget))
-                        } 
+                    if let Some(w) = &last_child{
+                        // set the child if not the same widget
+                        if w != widget{
+                            //println!("set child");
+                            root_view.set_child(Some(widget));
+                            last_child = Some(widget.clone());
+                        }
                     } else{
-                        root_view.set_child(Some(root.widget().as_gtk4_widget()));
+                        root_view.set_child(Some(widget));
+                        last_child = Some(widget.clone());
                     }
                 } else {
                     root_view.set_child_visible(false);

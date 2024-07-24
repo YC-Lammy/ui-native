@@ -8,6 +8,8 @@ pub trait NativeButtonImp: NativeElement {
     fn new() -> Self;
     fn set_width(&self, width: f32);
     fn set_height(&self, height: f32);
+    fn get_width(&self) -> f32;
+    fn get_height(&self) -> f32;
     fn set_visible(&self, visible: bool);
     fn set_disabled(&self, disabled: bool);
     fn set_label(&self, text: String);
@@ -18,6 +20,8 @@ pub trait NativeViewImp: NativeElement {
     fn new() -> Self;
     fn set_width(&self, width: f32);
     fn set_height(&self, height: f32);
+    fn get_width(&self) -> f32;
+    fn get_height(&self) -> f32;
     fn set_visible(&self, visible: bool);
     fn insert_child(&self, index: usize, elem: &dyn NativeElement);
     fn set_child_position(&self, child: &dyn NativeElement, x: f32, y: f32);
@@ -63,4 +67,15 @@ pub trait NativeTextImp: NativeElement {
     fn set_underline_colour(&self, colour: Colour);
     fn set_overline(&self, overline: bool);
     fn set_overline_colour(&self, colour: Colour);
+}
+
+pub trait NativeTextInputImp: NativeElement{
+    fn new() -> Self;
+    fn set_width(&self, width: f32);
+    fn set_height(&self, height: f32);
+    fn get_width(&self) -> f32;
+    fn get_height(&self) -> f32;
+    fn set_background_text(&self, text: &str);
+    fn set_on_text_changed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>);
+    fn set_on_enter_pressed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>);
 }

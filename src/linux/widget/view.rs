@@ -22,6 +22,12 @@ impl NativeViewImp for NativeView {
     fn set_height(&self, height: f32) {
         self.fixed.set_height_request(height as _);
     }
+    fn get_width(&self) -> f32 {
+        self.fixed.width() as f32
+    }
+    fn get_height(&self) -> f32 {
+        self.fixed.height() as f32
+    }
 
     fn set_visible(&self, visible: bool) {
         self.fixed.set_visible(visible)

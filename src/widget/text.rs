@@ -1,23 +1,30 @@
-use alloc::{boxed::Box, string::ToString};
+use std::sync::Arc;
 
-use crate::{
-    private::{ElementLike, NativeElement},
-    shadow_tree::component::{CoreComponent, TextNode},
-};
+use crate::private::{ElementLike, NativeElement};
+use crate::shadow_tree::component::{CoreComponent, TextNode};
+use crate::style::{StyleSheet, DEFAULT_STYLESHEET_ARC};
 
 pub struct Text {
     /// shadow tree
-    tree_node: TextNode,
+    text: String,
+    style: Arc<StyleSheet>
 }
 
 impl Text {
-    pub fn new<T: AsRef<str>>(text: T) -> Self {
+    pub fn new<T: Into<String>>(text: T) -> Self {
         Self {
-            tree_node: TextNode {
-                text: text.as_ref().to_string(),
-                ..Default::default()
-            },
+            text: text.into(),
+            style: DEFAULT_STYLESHEET_ARC.clone()
         }
+    }
+
+    pub fn with_style(mut self, style: Arc<StyleSheet>) -> Self{
+        self.set_style(style);
+        return self
+    }
+
+    pub fn set_style(&mut self, style: Arc<StyleSheet>){
+        self.style = style;
     }
 }
 
@@ -27,7 +34,11 @@ impl NativeElement for Text {
     }
 
     fn core_component(&mut self) -> crate::shadow_tree::component::CoreComponent {
-        CoreComponent::Text(Box::new(self.tree_node.clone()))
+        CoreComponent::Text(Box::new(TextNode{
+            id: None,
+            style: self.style.clone(),
+            text: self.text.clone()
+        }))
     }
 
     fn render(&mut self) {}

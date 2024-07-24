@@ -96,8 +96,14 @@ pub enum Command {
     ///////////////////////////////////////////
     /////////   Text Input commands   /////////
     ///////////////////////////////////////////
-    CreateTextInput(NodeID),
-
+    TextInputCreate{
+        id: NodeID,
+        style: Arc<StyleSheet>
+    },
+    TextInputSetBGText{
+        id: NodeID,
+        text: String
+    },
     
 
     /////////////////////////////////////////

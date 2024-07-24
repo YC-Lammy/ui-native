@@ -333,7 +333,29 @@ fn tree_generate_command(
                 )
             }
         }
-        (CoreComponent::TextInput(t), old_component) => {}
+        (CoreComponent::TextInput(t), old_component) => {
+            // remove the old node
+            if let Some(old) = old_component {
+                cmd.push(Command::RemoveNode {
+                    node: old.id().unwrap(),
+                });
+            }
+
+            t.id = Some(NodeID::new_unique());
+
+            cmd.push(Command::TextInputCreate {
+                id: t.id.unwrap(),
+                style: t.style.clone(),
+            });
+
+            if let Some(bg_text) = &t.background_text{
+                cmd.push(Command::TextInputSetBGText { 
+                    id: t.id.unwrap(), 
+                    text: bg_text.clone()
+                })
+            }
+            
+        }
         (CoreComponent::StackNavigator(s), Some(CoreComponent::StackNavigator(os))) => {
             // we handle stack navigator differently.
             // stack navigator has a unique id that is referenced by the reusable `StackNavigator`

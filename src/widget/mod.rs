@@ -4,11 +4,13 @@ pub mod stack_navigator;
 pub mod text;
 pub mod view;
 pub mod scrollview;
+pub mod input;
 
 pub use button::Button;
 pub use stack_navigator::{StackNavigator, StackNavigatorElement};
 pub use text::Text;
 pub use view::View;
+pub use input::TextInput;
 
 use crate::private::ElementLike;
 
