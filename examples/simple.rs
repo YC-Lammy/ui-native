@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ui_native::style::{AlignContent, AlignItems, Dimension, FlexDirection, MarginDimension, StyleSheet};
-use ui_native::widget::{Button, Text, TextInput, View};
+use ui_native::widget::{Button, Text, TextInput, View, TextEdit};
 use ui_native::AppBuilder;
 
 lazy_static::lazy_static!{
@@ -64,6 +64,9 @@ fn main() {
             TextInput::new()
             .with_background_text("hello world")
             .with_style(MY_INPUT_STYLE.clone())
+        );
+        view.add_child(
+            TextEdit::new()
         );
 
         view.set_style(MY_VIEW_STYLE.clone());

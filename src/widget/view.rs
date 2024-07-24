@@ -1,8 +1,5 @@
 use std::sync::Arc;
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-
 use crate::private::{ElementLike, NativeElement};
 use crate::shadow_tree::component::{CoreComponent, ViewNode};
 use crate::style::{StyleSheet, DEFAULT_STYLESHEET_ARC};

@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
-use alloc::sync::Arc;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub(crate) static GLOBAL_STATE_CHANGED: AtomicBool = AtomicBool::new(false);

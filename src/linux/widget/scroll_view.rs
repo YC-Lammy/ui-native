@@ -5,9 +5,6 @@ use crate::native_tree::NativeScrollViewImp;
 
 use super::NativeElement;
 
-
-
-
 pub struct NativeScrollView{
     view: gtk4::ScrolledWindow
 }

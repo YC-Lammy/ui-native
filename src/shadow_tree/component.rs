@@ -1,7 +1,5 @@
 use std::{any::Any, sync::Arc};
 
-use alloc::{boxed::Box, string::String, vec::Vec};
-
 use crate::custom::CustomElementWrapper;
 use  crate::private::ElementLike;
 use crate::style::StyleSheet;
@@ -53,6 +51,12 @@ pub struct TextInputNode {
     pub background_text: Option<String>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct TextEditNode{
+    pub id: Option<NodeID>,
+    pub style: Arc<StyleSheet>
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum NavigatorCommand {
     Goback,
@@ -102,6 +106,7 @@ pub enum CoreComponentType {
     Button,
     Text,
     TextInput,
+    TextEdit,
     StackNavigator,
     FlatList,
     Custom,
@@ -115,6 +120,7 @@ pub enum CoreComponent {
     Button(Box<ButtonNode>),
     Text(Box<TextNode>),
     TextInput(Box<TextInputNode>),
+    TextEdit(Box<TextEditNode>),
     StackNavigator(Box<StackNavigaterNode>),
 
     FlatList(Box<FlatListNode>),
@@ -131,6 +137,7 @@ impl CoreComponent {
             Self::Button(_) => CoreComponentType::Button,
             Self::Text(_) => CoreComponentType::Text,
             Self::TextInput(_) => CoreComponentType::TextInput,
+            Self::TextEdit(_) => CoreComponentType::TextEdit,
             Self::FlatList(_) => CoreComponentType::FlatList,
             Self::StackNavigator(_) => CoreComponentType::StackNavigator,
             Self::Custom(_) => CoreComponentType::Custom,
@@ -144,6 +151,7 @@ impl CoreComponent {
             Self::Button(b) => b.id,
             Self::Text(t) => t.id,
             Self::TextInput(t) => t.id,
+            Self::TextEdit(t) => t.id,
             Self::StackNavigator(n) => Some(n.id),
             Self::FlatList(f) => f.id,
             Self::Custom(c) => c.id,
@@ -163,6 +171,7 @@ impl CoreComponent {
             | Self::Button(_)
             | Self::Text(_)
             | Self::TextInput(_)
+            | Self::TextEdit(_)
             | Self::FlatList(_) => &mut [],
         }
     }
@@ -180,6 +189,7 @@ impl CoreComponent {
             | Self::Button(_)
             | Self::Text(_)
             | Self::TextInput(_)
+            | Self::TextEdit(_)
             | Self::FlatList(_) => &mut [],
         }
     }

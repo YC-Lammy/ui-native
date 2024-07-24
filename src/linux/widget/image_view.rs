@@ -28,10 +28,10 @@ impl NativeImageViewImp for NativeImageView{
         self.view.set_height_request(height as i32);
     }
     fn get_width(&self) -> f32 {
-        self.view.width() as f32
+        self.view.allocated_width() as f32
     }
     fn get_height(&self) -> f32 {
-        self.view.height() as f32
+        self.view.allocated_height() as f32
     }
     fn set_visible(&self, visible: bool) {
         self.view.set_visible(visible);

@@ -5,12 +5,14 @@ pub mod text;
 pub mod view;
 pub mod scrollview;
 pub mod input;
+pub mod text_edit;
 
 pub use button::Button;
 pub use stack_navigator::{StackNavigator, StackNavigatorElement};
 pub use text::Text;
 pub use view::View;
 pub use input::TextInput;
+pub use text_edit::TextEdit;
 
 use crate::private::ElementLike;
 

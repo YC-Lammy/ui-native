@@ -51,8 +51,25 @@ fn measure_function(
                     height: height,
                 }
             }
+            NativeComponent::TextInput(t) => {
+                let width = t.get_width();
+                let height = t.get_height();
+
+                Size{
+                    width,
+                    height
+                }
+            }
             // text edit
-            NativeComponent::TextEdit() => todo!(),
+            NativeComponent::TextEdit(t) => {
+                let width = t.get_width();
+                let height = t.get_height();
+
+                Size{
+                    width,
+                    height
+                }
+            },
             // image view
             NativeComponent::ImageView(i) => {
                 let mut width = i.get_width() as f32;

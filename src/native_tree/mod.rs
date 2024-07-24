@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::custom::NativeCustomElement;
-use crate::imp::{NativeButton, NativeElement, NativeFlatList, NativeText, NativeView, NativeImageView, NativeScrollView, NativeTextInput};
+use crate::imp::{NativeButton, NativeElement, NativeFlatList, NativeText, NativeView, NativeImageView, NativeScrollView, NativeTextInput, NativeTextEdit};
 use crate::shadow_tree::{command::Command, NodeID};
 use crate::style::StyleSheet;
 
@@ -18,7 +18,7 @@ pub enum NativeComponent {
     Button(NativeButton),
     Text(NativeText),
     TextInput(NativeTextInput),
-    TextEdit(),
+    TextEdit(NativeTextEdit),
     StackNavigator(),
 
     FlatList(NativeFlatList),
@@ -34,6 +34,7 @@ impl NativeComponent {
             Self::Button(b) => b,
             Self::Text(t) => t,
             Self::TextInput(t) => t,
+            Self::TextEdit(t) => t,
             Self::FlatList(f) => f,
             Self::Custom(c) => c.as_native_element(),
             _ => todo!(),
@@ -55,6 +56,7 @@ impl NativeComponent {
             Self::Button(b) => b.set_width(width),
             Self::Text(t) => t.set_width(width),
             Self::TextInput(t) => t.set_width(width),
+            Self::TextEdit(t) => t.set_width(width),
             Self::FlatList(f) => f.set_width(width as _),
             Self::Custom(c) => c.set_custom_width(width),
             _ => todo!(),
@@ -69,6 +71,7 @@ impl NativeComponent {
             Self::Button(b) => b.set_height(height),
             Self::Text(t) => t.set_height(height as _),
             Self::TextInput(t) => t.set_height(height),
+            Self::TextEdit(t) => t.set_height(height),
             Self::FlatList(f) => f.set_height(height as _),
             Self::Custom(c) => c.set_custom_height(height),
             _ => todo!(),
@@ -398,6 +401,19 @@ impl NativeTree {
                 Command::TextInputSetBGText { id, text } => {
                     let (_node, input) = self.get_text_input(id);
                     input.set_background_text(&text);
+                },
+
+
+                Command::TextEditCreate { id, style } => {
+                    self.nodes.insert(
+                        id, 
+                        NativeNode{
+                            parent: None,
+                            children: Vec::new(),
+                            component: Arc::new(NativeComponent::TextEdit(NativeTextEdit::new())),
+                            style
+                        }
+                    );
                 }
 
                 Command::CustomCreate { id, style, build_fn } => {

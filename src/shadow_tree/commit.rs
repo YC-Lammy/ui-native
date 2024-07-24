@@ -356,6 +356,33 @@ fn tree_generate_command(
             }
             
         }
+        (CoreComponent::TextEdit(t), Some(CoreComponent::TextEdit(ot))) => {
+            t.id = ot.id;
+
+            if !Arc::ptr_eq(&t.style, &ot.style){
+                cmd.push(
+                    Command::SetStyle { 
+                        node: t.id.unwrap(), 
+                        style: t.style.clone()
+                    }
+                )
+            }
+        }
+        (CoreComponent::TextEdit(t), old_component) => {
+            // remove the old node
+            if let Some(old) = old_component {
+                cmd.push(Command::RemoveNode {
+                    node: old.id().unwrap(),
+                });
+            }
+
+            t.id = Some(NodeID::new_unique());
+
+            cmd.push(Command::TextEditCreate {
+                id: t.id.unwrap(),
+                style: t.style.clone(),
+            });
+        }
         (CoreComponent::StackNavigator(s), Some(CoreComponent::StackNavigator(os))) => {
             // we handle stack navigator differently.
             // stack navigator has a unique id that is referenced by the reusable `StackNavigator`
@@ -366,9 +393,23 @@ fn tree_generate_command(
                     id: s.id,
                     style: s.style.clone()
                 });
+            } else{
+
             }
         }
-        (CoreComponent::StackNavigator(s), old_component) => {}
+        (CoreComponent::StackNavigator(s), old_component) => {
+            // remove the old node
+            if let Some(old) = old_component {
+                cmd.push(Command::RemoveNode {
+                    node: old.id().unwrap(),
+                });
+            }
+
+            cmd.push(Command::StackNavigatorCreate {
+                id: s.id,
+                style: s.style.clone()
+            });
+        }
         (CoreComponent::FlatList(f), Some(CoreComponent::FlatList(of))) => {
             f.id = of.id;
 

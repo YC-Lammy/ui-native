@@ -1,4 +1,7 @@
-extern crate alloc;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 mod app;
 mod context;
@@ -11,15 +14,16 @@ pub mod widget;
 
 #[cfg(target_os = "linux")]
 pub mod linux;
+
 #[cfg(target_os = "linux")]
 use linux as imp;
 
 #[cfg(target_family = "wasm")]
 pub mod web;
+use parking_lot::Mutex;
 #[cfg(target_family = "wasm")]
 use web as imp;
 
-use alloc::boxed::Box;
 pub use app::{App, AppBuilder};
 pub use context::Context;
 pub use state::State;
@@ -38,8 +42,6 @@ pub trait Element {
 }
 
 mod private {
-    use alloc::boxed::Box;
-
     use crate::shadow_tree::component::CoreComponent;
 
     use super::Context;
@@ -86,5 +88,60 @@ mod private {
         fn as_element(&mut self) -> Option<&mut dyn Element> {
             Some(self)
         }
+    }
+
+    impl<T: ElementLike> From<T> for Box<dyn ElementLike>{
+        fn from(value: T) -> Self {
+            Box::new(value)
+        }
+    }
+}
+
+pub fn clousure_once<F>(f: F) -> Arc<dyn Fn() + Send + Sync> where F: Fn() + Send + Sync + 'static{
+    lazy_static::lazy_static!{
+        static ref TYPE_MAP: Mutex<HashMap<(TypeId, u64), usize>> = Mutex::new(HashMap::new());
+    }
+
+    let mut type_map = TYPE_MAP.lock();
+
+    let type_id = TypeId::of::<F>();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    unsafe{
+        let data = core::slice::from_raw_parts(
+            &f as *const F as *const u8, 
+            core::mem::size_of::<F>()
+        );
+        data.hash(&mut hasher);
+    };
+    let hash = hasher.finish();
+
+    match type_map.get(&(type_id, hash)){
+        Some(c) => unsafe{
+            let ptr = *c as *const F;
+            Arc::increment_strong_count(ptr);
+
+            let a = Arc::from_raw(ptr);
+            
+            return a as _
+        }
+        None => {
+            let f = Arc::new(f);
+            let b = f.clone();
+
+            type_map.insert((type_id, hash), Arc::into_raw(b) as usize);
+
+            return f as _
+        }
+    };
+}
+
+#[test]
+fn test_closure_once(){
+    for _ in 0..10{
+        let c = clousure_once(move ||{
+
+        });
+
+        println!("{}", c.as_ref() as *const _ as *const u8 as usize);
     }
 }

@@ -51,11 +51,11 @@ impl NativeTextImp for NativeText {
     }
 
     fn get_width(&self) -> f32 {
-        self.label.width() as f32
+        self.label.allocated_width() as f32
     }
 
     fn get_height(&self) -> f32 {
-        self.label.height() as f32
+        self.label.allocated_height() as f32
     }
 
     fn set_visible(&self, visible: bool) {

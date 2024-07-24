@@ -59,10 +59,10 @@ impl NativeTextInputImp for NativeTextInput{
         self.input.set_height_request(height as i32);
     }
     fn get_width(&self) -> f32 {
-        self.input.width() as f32
+        self.input.allocated_width() as f32
     }
     fn get_height(&self) -> f32 {
-        self.input.height() as f32
+        self.input.allocated_height() as f32
     }
     fn set_background_text(&self, text: &str) {
         self.input.set_placeholder_text(Some(text))

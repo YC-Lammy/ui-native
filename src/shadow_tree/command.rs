@@ -104,6 +104,11 @@ pub enum Command {
         id: NodeID,
         text: String
     },
+
+    TextEditCreate{
+        id: NodeID,
+        style: Arc<StyleSheet>
+    },
     
 
     /////////////////////////////////////////

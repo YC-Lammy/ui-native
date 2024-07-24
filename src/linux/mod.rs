@@ -10,3 +10,4 @@ pub(super) use widget::NativeView;
 pub(super) use widget::NativeImageView;
 pub(super) use widget::NativeScrollView;
 pub(crate) use widget::NativeTextInput;
+pub(crate) use widget::NativeTextEdit;

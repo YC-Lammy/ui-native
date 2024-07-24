@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::style::Colour;
 
 use crate::imp::NativeElement;
+use crate::widget::flatlist::{ListViewDataSourceWrapper, ListViewWidgetFactoryWrapper};
 
 pub trait NativeButtonImp: NativeElement {
     fn new() -> Self;
@@ -78,4 +79,20 @@ pub trait NativeTextInputImp: NativeElement{
     fn set_background_text(&self, text: &str);
     fn set_on_text_changed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>);
     fn set_on_enter_pressed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>);
+}
+
+pub trait NativeTextEditImp: NativeElement{
+    fn new() -> Self;
+    fn set_width(&self, width: f32);
+    fn set_height(&self, height: f32);
+    fn get_width(&self) -> f32;
+    fn get_height(&self) -> f32;
+    fn set_on_text_changed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>);
+}
+
+pub trait NativeListViewImp: NativeElement{
+    fn new(
+        data: ListViewDataSourceWrapper,
+        render: ListViewWidgetFactoryWrapper
+    ) -> Self;
 }
