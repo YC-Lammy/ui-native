@@ -1,92 +1,138 @@
-
-use std::sync::Arc;
-
-use parking_lot::RwLock;
+use crossbeam_channel::{Receiver, Sender};
 
 use crate::private::{ElementLike, NativeElement};
-use crate::shadow_tree::component::{
-    CoreComponent, NavigatorCommand, StackNavigaterNode, StackNavigaterScreenOptions,
-};
+use crate::shadow_tree::component::{CoreComponent, NavigatorCommand, StackNavigaterNode};
 use crate::shadow_tree::NodeID;
+use crate::style::StyleRef;
 
-#[derive(Debug, Default, Clone)]
-pub struct StackNavigator {
-    inner: Arc<StackNavigatorInner>,
+pub enum StackNavigatorTransition{
+    None,
+    Fade,
+    Slide
 }
 
-#[derive(Debug, Default)]
-struct StackNavigatorInner {
+#[derive(Debug, Clone)]
+pub struct StackNavigator {
     /// node id of the corresponding navigator widget
     id: NodeID,
-    commands: RwLock<Vec<NavigatorCommand>>,
+    command_sender: Sender<NavigatorCommand>,
+    command_recv: Receiver<NavigatorCommand>,
 }
 
 impl StackNavigator {
     pub fn new() -> Self {
+        let (rx, tx) = crossbeam_channel::unbounded();
+
         Self {
-            inner: Arc::new(StackNavigatorInner {
-                id: NodeID::new_unique(),
-                commands: RwLock::new(Vec::new()),
-            }),
+            id: NodeID::new_unique(),
+            command_sender: rx,
+            command_recv: tx,
         }
     }
+
     /// should be called during `render` to construct a widget
     pub fn navigator(&self) -> StackNavigatorElement {
-        let nav_node = Box::new(StackNavigaterNode {
-            id: self.inner.id,
-            ..Default::default()
-        });
-
         return StackNavigatorElement {
-            navigator_inner: self.inner.clone(),
-            tree_node: nav_node,
+            id: self.id,
+            style: StyleRef::DEFAULT,
+            command_sender: self.command_sender.clone(),
+            command_recv: self.command_recv.clone(),
             children: Vec::new(),
+
+            rendered_children: Vec::new(),
+            child_names: Vec::new(),
         };
     }
 
+    pub fn push(&self, name: &str) {
+        let _ = self
+            .command_sender
+            .send(NavigatorCommand::Push(name.to_string()));
+    }
+
     /// go to the page in index, noop if index is not valid
-    pub fn goto_index(&self, index: usize) {
-        self.inner
-            .commands
-            .write()
-            .push(NavigatorCommand::Goto(index))
+    pub fn goto(&self, name: &str) {
+        let _ = self
+            .command_sender
+            .send(NavigatorCommand::Goto(name.to_string()));
     }
 
     /// goback to the last page, noop if cannot go back
     pub fn goback(&self) {
-        self.inner.commands.write().push(NavigatorCommand::Goback)
+        let _ = self.command_sender.send(NavigatorCommand::Goback);
+    }
+}
+
+impl Default for StackNavigator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 pub struct StackNavigatorElement {
-    navigator_inner: Arc<StackNavigatorInner>,
-    ///
-    tree_node: Box<StackNavigaterNode>,
-    children: Vec<(Box<dyn ElementLike>, StackNavigaterScreenOptions)>,
+    id: NodeID,
+    style: StyleRef,
+    command_sender: Sender<NavigatorCommand>,
+    command_recv: Receiver<NavigatorCommand>,
+    children: Vec<(String, Box<dyn ElementLike>)>,
+
+    rendered_children: Vec<CoreComponent>,
+    child_names: Vec<String>,
 }
 
 impl StackNavigatorElement {
-    pub fn with_screen<T>(mut self, component: T, options: StackNavigaterScreenOptions) -> Self
+    pub fn with_page<F, T>(mut self, name: &str, component: F) -> Self
     where
+        F: Fn(StackNavigator) -> T,
         T: ElementLike,
     {
-        self.children.push((Box::new(component), options));
+        let component = component(StackNavigator {
+            id: self.id,
+            command_sender: self.command_sender.clone(),
+            command_recv: self.command_recv.clone(),
+        });
+
+        self.children.push((name.to_string(), Box::new(component)));
         return self;
+    }
+
+    pub fn add_page<F, T>(&mut self, name: &str, component: F)
+    where
+        F: Fn(StackNavigator) -> T,
+        T: ElementLike,
+    {
+        let component = component(StackNavigator {
+            id: self.id,
+            command_sender: self.command_sender.clone(),
+            command_recv: self.command_recv.clone(),
+        });
+
+        self.children.push((name.to_string(), Box::new(component)));
+    }
+
+    pub fn with_style<S: Into<StyleRef>>(mut self, style: S) -> Self {
+        self.set_style(style);
+        return self;
+    }
+
+    pub fn set_style<S: Into<StyleRef>>(&mut self, style: S) {
+        self.style = style.into();
     }
 }
 
 impl NativeElement for StackNavigatorElement {
-    fn on_state_change(&mut self, ctx: &crate::Context) {
-        for (child, _) in &mut self.children {
-            child.on_state_change(ctx)
-        }
-    }
     fn core_component(&mut self) -> CoreComponent {
-        CoreComponent::StackNavigator(self.tree_node.clone())
+        CoreComponent::StackNavigator(Box::new(StackNavigaterNode {
+            id: self.id,
+            style: self.style.clone(),
+            command_reciever: self.command_recv.clone(),
+            children: core::mem::replace(&mut self.rendered_children, Vec::new()),
+            child_names: core::mem::replace(&mut self.child_names, Vec::new()),
+        }))
     }
     fn render(&mut self) {
         // render all the children
-        for (child, options) in &mut self.children {
+        for (name, child) in &mut self.children {
             // render the child
             let mut elem = child.render();
 
@@ -101,17 +147,9 @@ impl NativeElement for StackNavigatorElement {
             };
 
             // push child
-            self.tree_node.children.push(component);
-            // push screen
-            self.tree_node.screen_options.push(*options);
+            self.rendered_children.push(component);
+            self.child_names.push(name.clone());
         }
-
-        // acquire write lock
-        let mut commands = self.navigator_inner.commands.write();
-        // take and clear commands
-        let commands = core::mem::replace(commands.as_mut(), Vec::new());
-
-        self.tree_node.commands = commands;
     }
 }
 

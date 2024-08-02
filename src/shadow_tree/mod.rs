@@ -5,7 +5,7 @@ pub mod component;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeID(u64);
+pub struct NodeID(pub(crate) u64);
 
 impl Default for NodeID {
     fn default() -> Self {

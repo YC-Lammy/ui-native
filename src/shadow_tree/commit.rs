@@ -30,13 +30,11 @@ fn tree_generate_command(
             // set the id
             v.id = ov.id;
 
-            if !Arc::ptr_eq(&v.style, &ov.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: v.id.unwrap(), 
-                        style: v.style.clone()
-                    }
-                )
+            if !v.style.is_same(&ov.style) {
+                cmd.push(Command::SetStyle {
+                    node: v.id.unwrap(),
+                    style: v.style.clone(),
+                })
             }
 
             let mut v_iter = v.children.iter_mut();
@@ -127,13 +125,11 @@ fn tree_generate_command(
         (CoreComponent::ImageView(v), Some(CoreComponent::ImageView(ov))) => {
             v.id = ov.id;
 
-            if !Arc::ptr_eq(&v.style, &ov.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: v.id.unwrap(), 
-                        style: v.style.clone()
-                    }
-                )
+            if !v.style.is_same(&ov.style) {
+                cmd.push(Command::SetStyle {
+                    node: v.id.unwrap(),
+                    style: v.style.clone(),
+                })
             }
         }
         (CoreComponent::ImageView(v), old_component) => {
@@ -146,7 +142,7 @@ fn tree_generate_command(
             v.id = Some(NodeID::new_unique());
 
             // create image view
-            cmd.push(Command::ImageViewCreate { 
+            cmd.push(Command::ImageViewCreate {
                 id: v.id.unwrap(),
                 style: v.style.clone(),
             });
@@ -155,40 +151,33 @@ fn tree_generate_command(
             // set the id
             v.id = ov.id;
 
-            if !Arc::ptr_eq(&v.style, &ov.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: v.id.unwrap(), 
-                        style: v.style.clone()
-                    }
-                )
+            if !v.style.is_same(&ov.style) {
+                cmd.push(Command::SetStyle {
+                    node: v.id.unwrap(),
+                    style: v.style.clone(),
+                })
             }
 
-            match &mut v.child{
+            match &mut v.child {
                 Some(child) => {
                     // generate command for child
                     tree_generate_command(child, ov.child.as_ref(), cmd);
 
                     // check if child is the same
-                    if child.id() != ov.child.as_ref().and_then(|c|c.id()){
-                        cmd.push(
-                            Command::ScrollViewSetChild { 
-                                id: v.id.unwrap(), 
-                                child: child.id().unwrap()
-                            }
-                        )
+                    if child.id() != ov.child.as_ref().and_then(|c| c.id()) {
+                        cmd.push(Command::ScrollViewSetChild {
+                            id: v.id.unwrap(),
+                            child: child.id().unwrap(),
+                        })
                     }
                 }
                 None => {
                     // remove child
-                    if ov.child.is_some(){
-                        cmd.push(Command::ScrollViewRemoveChild { 
-                            id: v.id.unwrap()
-                        })
+                    if ov.child.is_some() {
+                        cmd.push(Command::ScrollViewRemoveChild { id: v.id.unwrap() })
                     }
                 }
             }
-            
         }
         (CoreComponent::ScrollView(v), old_component) => {
             // remove the old node
@@ -201,21 +190,19 @@ fn tree_generate_command(
             v.id = Some(NodeID::new_unique());
 
             // create scroll view
-            cmd.push(Command::ScrollViewCreate { 
-                id: v.id.unwrap(), 
-                style: v.style.clone()
+            cmd.push(Command::ScrollViewCreate {
+                id: v.id.unwrap(),
+                style: v.style.clone(),
             });
         }
         (CoreComponent::Button(b), Some(CoreComponent::Button(ob))) => {
             b.id = ob.id;
 
-            if !Arc::ptr_eq(&b.style, &ob.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: b.id.unwrap(), 
-                        style: b.style.clone()
-                    }
-                )
+            if !b.style.is_same(&ob.style) {
+                cmd.push(Command::SetStyle {
+                    node: b.id.unwrap(),
+                    style: b.style.clone(),
+                })
             }
 
             // update diabled if changed
@@ -268,7 +255,7 @@ fn tree_generate_command(
 
             cmd.push(Command::ButtonCreate {
                 id: b.id.unwrap(),
-                style: b.style.clone()
+                style: b.style.clone(),
             });
 
             cmd.push(Command::ButtonSetDisabled {
@@ -289,13 +276,11 @@ fn tree_generate_command(
         (CoreComponent::Text(t), Some(CoreComponent::Text(ot))) => {
             t.id = ot.id;
 
-            if !Arc::ptr_eq(&t.style, &ot.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: t.id.unwrap(), 
-                        style: ot.style.clone()
-                    }
-                )
+            if !t.style.is_same(&ot.style) {
+                cmd.push(Command::SetStyle {
+                    node: t.id.unwrap(),
+                    style: ot.style.clone(),
+                })
             }
 
             if t.text != ot.text {
@@ -324,13 +309,18 @@ fn tree_generate_command(
         (CoreComponent::TextInput(t), Some(CoreComponent::TextInput(ot))) => {
             t.id = ot.id;
 
-            if !Arc::ptr_eq(&t.style, &ot.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: t.id.unwrap(), 
-                        style: t.style.clone()
-                    }
-                )
+            if !t.style.is_same(&ot.style) {
+                cmd.push(Command::SetStyle {
+                    node: t.id.unwrap(),
+                    style: t.style.clone(),
+                })
+            }
+
+            if t.background_text != ot.background_text {
+                cmd.push(Command::TextInputSetBGText {
+                    id: t.id.unwrap(),
+                    text: t.background_text.clone().unwrap_or_default(),
+                })
             }
         }
         (CoreComponent::TextInput(t), old_component) => {
@@ -348,24 +338,21 @@ fn tree_generate_command(
                 style: t.style.clone(),
             });
 
-            if let Some(bg_text) = &t.background_text{
-                cmd.push(Command::TextInputSetBGText { 
-                    id: t.id.unwrap(), 
-                    text: bg_text.clone()
+            if let Some(bg_text) = &t.background_text {
+                cmd.push(Command::TextInputSetBGText {
+                    id: t.id.unwrap(),
+                    text: bg_text.clone(),
                 })
             }
-            
         }
         (CoreComponent::TextEdit(t), Some(CoreComponent::TextEdit(ot))) => {
             t.id = ot.id;
 
-            if !Arc::ptr_eq(&t.style, &ot.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: t.id.unwrap(), 
-                        style: t.style.clone()
-                    }
-                )
+            if !t.style.is_same(&ot.style) {
+                cmd.push(Command::SetStyle {
+                    node: t.id.unwrap(),
+                    style: t.style.clone(),
+                })
             }
         }
         (CoreComponent::TextEdit(t), old_component) => {
@@ -391,10 +378,69 @@ fn tree_generate_command(
             if s.id != os.id {
                 cmd.push(Command::StackNavigatorCreate {
                     id: s.id,
-                    style: s.style.clone()
+                    style: s.style.clone(),
+                    command_recv: s.command_reciever.clone(),
                 });
-            } else{
+            } else {
+                // remove screens that are no longer in the navigator
+                for (i, name) in os.child_names.iter().enumerate() {
+                    if !s.child_names.contains(name) {
+                        // remove child from navigator
+                        cmd.push(Command::StackNavigatorRemoveChild {
+                            id: s.id,
+                            child: os.children[i].id().unwrap(),
+                            name: name.clone(),
+                        });
+                        // remove node
+                        cmd.push(Command::RemoveNode {
+                            node: os.children[i].id().unwrap(),
+                        });
+                    }
+                }
 
+                // add pages that are not already in navigator
+                for (i, name) in s.child_names.iter().enumerate() {
+                    if !os.child_names.contains(name) {
+                        let child_id = tree_generate_command(&mut s.children[i], None, cmd);
+
+                        cmd.push(Command::StackNavigatorAddChild {
+                            id: s.id,
+                            child: child_id,
+                            name: name.clone(),
+                        });
+                    }
+                }
+
+                // loop through all pages to find pages that retains
+                for (i, name) in s.child_names.iter().enumerate() {
+                    for (u, n) in os.child_names.iter().enumerate() {
+                        // same page if name is equal
+                        if n == name {
+                            // compare two pages
+                            tree_generate_command(&mut s.children[i], Some(&os.children[u]), cmd);
+
+                            // if the id is not the same, the component must have been changed
+                            if s.children[i].id() != os.children[u].id() {
+                                // remove the old child from navigator
+                                cmd.push(Command::StackNavigatorRemoveChild {
+                                    id: s.id,
+                                    child: os.children[u].id().unwrap(),
+                                    name: name.clone(),
+                                });
+                                // destroy the child
+                                cmd.push(Command::RemoveNode {
+                                    node: os.children[u].id().unwrap(),
+                                });
+                                // add the new child to navigator
+                                cmd.push(Command::StackNavigatorAddChild {
+                                    id: s.id,
+                                    child: s.children[i].id().unwrap(),
+                                    name: name.clone(),
+                                })
+                            }
+                        }
+                    }
+                }
             }
         }
         (CoreComponent::StackNavigator(s), old_component) => {
@@ -407,37 +453,47 @@ fn tree_generate_command(
 
             cmd.push(Command::StackNavigatorCreate {
                 id: s.id,
-                style: s.style.clone()
+                style: s.style.clone(),
+                command_recv: s.command_reciever.clone(),
             });
+
+            for (i, child) in s.children.iter_mut().enumerate() {
+                let child_id = tree_generate_command(child, None, cmd);
+
+                cmd.push(Command::StackNavigatorAddChild {
+                    id: s.id,
+                    child: child_id,
+                    name: s.child_names[i].clone(),
+                });
+            }
         }
-        (CoreComponent::FlatList(f), Some(CoreComponent::FlatList(of))) => {
+        (CoreComponent::ListView(f), Some(CoreComponent::ListView(of))) => {
             f.id = of.id;
 
-            if !Arc::ptr_eq(&f.style, &of.style){
-                cmd.push(
-                    Command::SetStyle { 
-                        node: f.id.unwrap(), 
-                        style: f.style.clone()
-                    }
-                )
+            if !f.style.is_same(&of.style) {
+                cmd.push(Command::SetStyle {
+                    node: f.id.unwrap(),
+                    style: f.style.clone(),
+                })
+            }
+        }
+        (CoreComponent::ListView(f), old_component) => {
+            // remove the old node
+            if let Some(old) = old_component {
+                cmd.push(Command::RemoveNode {
+                    node: old.id().unwrap(),
+                });
             }
 
-            cmd.push(Command::FlatListSetGetItem {
-                id: f.id.unwrap(),
-                get_item: f.get_item.clone(),
-            });
+            f.id = Some(NodeID::new_unique());
 
-            cmd.push(Command::FlatListSetGetLen {
+            cmd.push(Command::ListViewCreate {
                 id: f.id.unwrap(),
-                get_len: f.get_len.clone(),
-            });
-
-            cmd.push(Command::FlatListSetRender {
-                id: f.id.unwrap(),
-                render: f.render.clone(),
-            });
+                style: f.style.clone(),
+                data: f.data.clone(),
+                factory: f.factory.clone(),
+            })
         }
-        (CoreComponent::FlatList(f), old_component) => {}
         (CoreComponent::Custom(custom), old_component) => {
             // check if the old component is also a custom component
             if let Some(CoreComponent::Custom(old_custom)) = old_component {

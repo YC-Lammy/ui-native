@@ -1,7 +1,19 @@
-
 use crate::imp::NativeApp;
 use crate::private::ElementLike;
-use crate::Context;
+
+pub trait Application: Send + Sync + 'static {
+    fn render(&mut self) -> crate::ElementLike;
+}
+
+impl<F, E> Application for F
+where
+    F: Fn() -> E + Send + Sync + 'static,
+    E: ElementLike,
+{
+    fn render(&mut self) -> crate::ElementLike {
+        Box::new((self)())
+    }
+}
 
 pub struct App {
     app: NativeApp,
@@ -12,12 +24,8 @@ impl App {
         AppBuilder::new()
     }
 
-    pub fn launch<T, F>(self, on_active: F)
-    where
-        F: Fn(&Context) -> T + Send + Sync + 'static,
-        T: ElementLike,
-    {
-        self.app.launch(on_active)
+    pub fn launch<A: Application>(self, app: A) {
+        self.app.launch(app)
     }
 }
 

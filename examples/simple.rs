@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use ui_native::style::{AlignContent, AlignItems, Dimension, FlexDirection, MarginDimension, StyleSheet};
-use ui_native::widget::{Button, Text, TextInput, View, TextEdit};
+use ui_native::style::{
+    AlignContent, AlignItems, Dimension, FlexDirection, MarginDimension, StyleSheet,
+};
+use ui_native::widget::{Button, Text, TextEdit, TextInput, View};
 use ui_native::AppBuilder;
 
-lazy_static::lazy_static!{
+lazy_static::lazy_static! {
     static ref MY_VIEW_STYLE: Arc<StyleSheet> = {
         let style_sheet = Arc::new(StyleSheet::new());
 
@@ -38,7 +40,7 @@ fn main() {
         .build()
         .expect("");
 
-    app.launch(|_ctx| {
+    app.launch(|| {
         let mut view = View::new();
 
         let t1 = Text::new("hello world");
@@ -48,26 +50,20 @@ fn main() {
         view.add_child(t2);
         view.add_child(
             Button::new()
-            .with_label("press me")
-            .with_on_click(||{
-                println!("button clicked")
-            })
+                .with_label("press me")
+                .with_on_click(|| println!("button clicked")),
         );
         view.add_child(
             Button::new()
-            .with_label("press me")
-            .with_on_click(||{
-                println!("button clicked")
-            })
+                .with_label("press me")
+                .with_on_click(|| println!("button clicked")),
         );
         view.add_child(
             TextInput::new()
-            .with_background_text("hello world")
-            .with_style(MY_INPUT_STYLE.clone())
+                .with_background_text("hello world")
+                .with_style(MY_INPUT_STYLE.clone()),
         );
-        view.add_child(
-            TextEdit::new()
-        );
+        view.add_child(TextEdit::new());
 
         view.set_style(MY_VIEW_STYLE.clone());
 

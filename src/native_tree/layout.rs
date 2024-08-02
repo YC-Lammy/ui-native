@@ -1,223 +1,536 @@
-use std::sync::Arc;
+use taffy::Size;
 
-use taffy::{Size, TaffyTree};
-
+use crate::custom::NativeCustomElement;
+use crate::imp::{
+    NativeButton, NativeImageView, NativeListView, NativeText, NativeTextEdit, NativeTextInput,
+};
 use crate::shadow_tree::NodeID;
+use crate::style::StyleRef;
 
-use super::{NativeComponent, NativeTree};
 use super::traits::*;
+use super::{NativeComponent, NativeTree};
 
-/// node context is used for temporary storing component for measure function
-struct NodeContext{
-    comp: Arc<NativeComponent>
-}
-
-fn measure_function(
-    known_dimensions: taffy::Size<Option<f32>>,
-    available_space: taffy::Size<taffy::AvailableSpace>,
-    _id: taffy::NodeId,
-    node_context: Option<&mut NodeContext>,
-    _style: &taffy::Style,
-) -> taffy::Size<f32> {
-    // return the known dimension
-    if let taffy::Size {
-        width: Some(width),
-        height: Some(height),
-    } = known_dimensions
-    {
-        return taffy::Size { width, height };
-    }
-
-    // measure the actual size
-    match node_context {
-        // should not happen
-        None => Size::ZERO,
-        Some(ctx) => match ctx.comp.as_ref() {
-            // text widget
-            NativeComponent::Text(t) => {
-                let mut width = t.get_width() as f32;
-                let mut height = t.get_height() as f32;
-
-                if let taffy::AvailableSpace::Definite(w) = available_space.width {
-                    width = width.min(w);
-                }
-
-                if let taffy::AvailableSpace::Definite(h) = available_space.height {
-                    height = height.min(h);
-                }
-
-                Size {
-                    width: width,
-                    height: height,
-                }
-            }
-            NativeComponent::TextInput(t) => {
-                let width = t.get_width();
-                let height = t.get_height();
-
-                Size{
-                    width,
-                    height
-                }
-            }
-            // text edit
-            NativeComponent::TextEdit(t) => {
-                let width = t.get_width();
-                let height = t.get_height();
-
-                Size{
-                    width,
-                    height
-                }
-            },
-            // image view
-            NativeComponent::ImageView(i) => {
-                let mut width = i.get_width() as f32;
-                let mut height = i.get_height() as f32;
-
-                if let taffy::AvailableSpace::Definite(w) = available_space.width {
-                    if width > w{
-                        width = w;
-                        i.set_width(w);
-                    }
-                }
-
-                if let taffy::AvailableSpace::Definite(h) = available_space.height {
-                    if height > h{
-                        height = h;
-                        i.set_height(h);
-                    }
-                }
-
-                Size {
-                    width: width,
-                    height: height,
-                }
-            },
-            NativeComponent::Button(b) => {
-                let width = b.get_width();
-                let height = b.get_height();
-
-                Size{
-                    width,
-                    height
-                }
-            }
-            NativeComponent::Custom(c) => {
-                if let Some((width, height)) = c.measure_custom_size() {
-                    Size { width, height }
-                } else {
-                    Size::ZERO
-                }
-            }
-            _ => Size::ZERO,
-        },
-    }
-}
-
-
-impl NativeTree{
-
+impl NativeTree {
     /// recompute the layout of the tree
     pub fn compute_layout(&mut self, width: f64, height: f64) {
-        let mut stretch = TaffyTree::<NodeContext>::new();
-
         let root = match self.root {
             Some(r) => r,
             None => return,
         };
 
-        // create the root node and its children
-        let root_node = self.create_layout_node(&mut stretch, root);
-
-        // compute the layout
-        stretch
-            .compute_layout_with_measure(
-                root_node,
-                taffy::Size {
-                    width: taffy::AvailableSpace::Definite(width as _),
-                    height: taffy::AvailableSpace::Definite(height as _),
-                },
-                measure_function,
-            )
-            .expect("");
+        taffy::compute_root_layout(
+            self,
+            taffy::NodeId::new(root.0),
+            taffy::Size {
+                width: taffy::AvailableSpace::Definite(width as f32),
+                height: taffy::AvailableSpace::Definite(height as f32),
+            },
+        );
 
         // assign layout to nodes
-        self.assign_layout(&stretch, root_node);
+        self.assign_layout(root);
     }
 
-    fn create_layout_node(
+    fn assign_layout(&self, id: NodeID) -> &taffy::Layout {
+        // get the node
+        let node = self.nodes.get(&id).expect("invalid id");
+
+        for child in &node.children {
+            let child_layout = self.assign_layout(*child);
+            let child_node = self.nodes.get(child).expect("invalid id");
+
+            // layout the child
+            node.component.layout_child(
+                &child_node.component,
+                child_layout.location.x,
+                child_layout.location.y,
+                child_layout.size.width,
+                child_layout.size.height,
+            );
+        }
+        return &node.computed_layout;
+    }
+}
+
+// workaround for the child iterator
+pub enum ChildIdIter<'a> {
+    Normal { iter: core::slice::Iter<'a, NodeID> },
+    Navigator { gotten: bool, page: NodeID },
+    None,
+}
+
+impl<'a> Iterator for ChildIdIter<'a> {
+    type Item = taffy::NodeId;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Normal { iter } => match iter.next() {
+                Some(id) => Some(taffy::NodeId::new(id.0)),
+                None => None,
+            },
+            Self::Navigator { gotten, page } => {
+                if !*gotten {
+                    *gotten = true;
+                    Some(taffy::NodeId::new(page.0))
+                } else {
+                    None
+                }
+            }
+            Self::None => None,
+        }
+    }
+}
+
+impl taffy::traits::TraversePartialTree for NativeTree {
+    type ChildIter<'a> = ChildIdIter<'a>;
+
+    fn child_ids(&self, parent_node_id: taffy::NodeId) -> Self::ChildIter<'_> {
+        let parent_id: u64 = unsafe { core::mem::transmute(parent_node_id) };
+        let parent = self.nodes.get(&NodeID(parent_id)).expect("invalid id");
+
+        // we handle navigator differently since only one page is shown at a time
+        match parent.component.as_ref() {
+            NativeComponent::StackNavigator(n) => {
+                if let Some(p) = n.visible_child() {
+                    ChildIdIter::Navigator {
+                        gotten: false,
+                        page: p,
+                    }
+                } else {
+                    ChildIdIter::None
+                }
+            }
+            _ => ChildIdIter::Normal {
+                iter: parent.children.iter(),
+            },
+        }
+    }
+    fn child_count(&self, parent_node_id: taffy::NodeId) -> usize {
+        let parent_id: u64 = unsafe { core::mem::transmute(parent_node_id) };
+        let parent = self.nodes.get(&NodeID(parent_id)).expect("invalid id");
+
+        // navigators have either one or none child
+        match parent.component.as_ref() {
+            NativeComponent::StackNavigator(n) => {
+                if n.visible_child().is_some() {
+                    return 1;
+                }
+                return 0;
+            }
+            _ => parent.children.len(),
+        }
+    }
+    fn get_child_id(&self, parent_node_id: taffy::NodeId, child_index: usize) -> taffy::NodeId {
+        let parent_id: u64 = unsafe { core::mem::transmute(parent_node_id) };
+        let parent = self.nodes.get(&NodeID(parent_id)).expect("invalid id");
+
+        match parent.children.get(child_index) {
+            Some(id) => taffy::NodeId::new(id.0),
+            None => panic!("invalid child index"),
+        }
+    }
+}
+
+impl taffy::traits::TraverseTree for NativeTree {}
+
+impl taffy::LayoutPartialTree for NativeTree {
+    fn get_style(&self, node_id: taffy::NodeId) -> &taffy::Style {
+        let id = unsafe { NodeID(core::mem::transmute(node_id)) };
+        let node = self.nodes.get(&id).expect("invalid id");
+
+        return &node.layout_style;
+    }
+    fn get_cache_mut(&mut self, node_id: taffy::NodeId) -> &mut taffy::Cache {
+        let id = unsafe { NodeID(core::mem::transmute(node_id)) };
+        let node = self.nodes.get_mut(&id).expect("invalid id");
+
+        return &mut node.cache;
+    }
+    fn set_unrounded_layout(&mut self, node_id: taffy::NodeId, layout: &taffy::Layout) {
+        let id = unsafe { NodeID(core::mem::transmute(node_id)) };
+        let node = self.nodes.get_mut(&id).expect("invalid id");
+
+        node.computed_layout = layout.clone();
+    }
+    fn compute_child_layout(
         &mut self,
-        stretch: &mut TaffyTree<NodeContext>,
-        node_id: NodeID,
-    ) -> taffy::NodeId {
-        let node = self.nodes.get(&node_id).expect("invalid node id");
-
-        // get the layout
-        let mut style: taffy::Style = node.style.to_taffy_style();
-
-        if node.component.is_scroll_view(){
-            style.overflow = taffy::Point{
-                x: taffy::Overflow::Scroll,
-                y: taffy::Overflow::Scroll
-            };
+        node_id: taffy::NodeId,
+        inputs: taffy::LayoutInput,
+    ) -> taffy::LayoutOutput {
+        // If RunMode is PerformHiddenLayout then this indicates that an ancestor node is `Display::None`
+        // and thus that we should lay out this node using hidden layout regardless of it's own display style.
+        if inputs.run_mode == taffy::RunMode::PerformHiddenLayout {
+            return taffy::compute_hidden_layout(self, node_id);
         }
 
-        let comp = node.component.clone();
+        // We run the following wrapped in "compute_cached_layout", which will check the cache for an entry matching the node and inputs and:
+        //   - Return that entry if exists
+        //   - Else call the passed closure (below) to compute the result
+        //
+        // If there was no cache match and a new result needs to be computed then that result will be added to the cache
+        return taffy::compute_cached_layout(self, node_id, inputs, |tree, node_id, inputs| {
+            let id = unsafe { NodeID(core::mem::transmute(node_id)) };
+            let node = tree.nodes.get_mut(&id).expect("invalid id");
 
-        // create the parent node
-        let id = stretch
-            .new_leaf_with_context(style, NodeContext{comp})
-            .expect("Stretch");
+            let display_mode = node.layout_style.display;
+            let has_children = node.children.len() > 0;
 
-        let children = node.children.clone();
+            // Dispatch to a layout algorithm based on the node's display style and whether the node has children or not.
+            match (display_mode, has_children) {
+                (taffy::Display::None, _) => taffy::compute_hidden_layout(tree, node_id),
+                (taffy::Display::Block, true) => taffy::compute_block_layout(tree, node_id, inputs),
+                (taffy::Display::Flex, true) => {
+                    taffy::compute_flexbox_layout(tree, node_id, inputs)
+                }
+                (taffy::Display::Grid, true) => taffy::compute_grid_layout(tree, node_id, inputs),
+                (_, false) => {
+                    // compute leaf layout
+                    taffy::compute_leaf_layout(
+                        inputs,
+                        &node.layout_style,
+                        |known_dimensions, available_space| {
+                            measuring_function(
+                                &node.component,
+                                &node.style,
+                                known_dimensions,
+                                available_space,
+                            )
+                        },
+                    )
+                }
+            }
+        });
+    }
+}
 
-        // add child to node
-        for child_id in children {
-            // create the layout
-            let child_id = self.create_layout_node(stretch, child_id);
-            // add child
-            stretch
-                .add_child(id, child_id)
-                .expect("failed to add child");
+impl taffy::traits::PrintTree for NativeTree {
+    fn get_debug_label(&self, node_id: taffy::NodeId) -> &'static str {
+        let id = unsafe { NodeID(core::mem::transmute(node_id)) };
+        let node = self.nodes.get(&id).expect("invalid id");
+
+        match node.component.as_ref() {
+            NativeComponent::Button(_) => "button",
+            NativeComponent::Custom(_) => "custom",
+            NativeComponent::View(_) => "view",
+            NativeComponent::ImageView(_) => "image view",
+            NativeComponent::ListView(_) => "list view",
+            NativeComponent::ScrollView(_) => "scroll view",
+            NativeComponent::StackNavigator(_) => "stack navigator",
+            NativeComponent::Text(_) => "text",
+            NativeComponent::TextInput(_) => "text input",
+            NativeComponent::TextEdit(_) => "text edit",
         }
+    }
+    fn get_final_layout(&self, node_id: taffy::NodeId) -> &taffy::Layout {
+        let id = unsafe { NodeID(core::mem::transmute(node_id)) };
+        let node = self.nodes.get(&id).expect("invalid id");
 
-        return id;
+        &node.computed_layout
+    }
+}
+
+fn list_view_measuring_function(
+    list_view: &NativeListView,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
     }
 
-    fn assign_layout<'a>(
-        &mut self,
-        stretch: &'a TaffyTree<NodeContext>,
-        node: taffy::NodeId,
-    ) -> &'a taffy::Layout {
+    let measured = list_view.measure(known_width, known_height);
 
-        let context = stretch.get_node_context(node).unwrap();
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
 
-        let layout = stretch.layout(node).expect("");
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
 
-        context.comp.set_width(layout.size.width);
-        context.comp.set_height(layout.size.height);
+    return Size { width, height };
+}
 
-        let mut i = 0;
-        loop{
-            let child = match stretch.child_at_index(node, i){
-                Ok(c) => c,
-                Err(_) => break
-            };
-
-            let child_layout = self.assign_layout(stretch, child);
-
-            // get the child context
-            let child_context = stretch.get_node_context(child).unwrap();
-            // set the child position
-            context.comp.set_child_position(
-                &child_context.comp,
-                 child_layout.location.x, 
-                 child_layout.location.y
-                );
-
-            i += 1;
+fn measuring_function(
+    component: &NativeComponent,
+    style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    match component {
+        NativeComponent::Button(b) => {
+            button_measuring_function(b, style, known_dimensions, available_space)
         }
-        return layout;
+        NativeComponent::Custom(c) => {
+            custom_measuring_function(c.as_ref(), style, known_dimensions, available_space)
+        }
+        NativeComponent::ImageView(i) => {
+            image_view_measuring_function(i, style, known_dimensions, available_space)
+        }
+        NativeComponent::ListView(l) => {
+            list_view_measuring_function(l, style, known_dimensions, available_space)
+        }
+        NativeComponent::ScrollView(_) => Size::ZERO,
+        NativeComponent::View(_) => Size::ZERO,
+        NativeComponent::StackNavigator(_) => Size::ZERO,
+        NativeComponent::Text(t) => {
+            text_measuring_function(t, style, known_dimensions, available_space)
+        }
+        NativeComponent::TextInput(t) => {
+            text_input_measuring_function(t, style, known_dimensions, available_space)
+        }
+        NativeComponent::TextEdit(t) => {
+            text_edit_measuring_function(t, style, known_dimensions, available_space)
+        }
     }
+}
+
+fn button_measuring_function(
+    button: &NativeButton,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
+    }
+
+    let measured = button.measure(known_width, known_height);
+
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    return Size { width, height };
+}
+
+fn image_view_measuring_function(
+    image_view: &NativeImageView,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
+    }
+
+    let measured = image_view.measure(known_width, known_height);
+
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    return Size { width, height };
+}
+
+fn text_measuring_function(
+    text: &NativeText,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
+    }
+
+    let measured = text.measure(known_width, known_height);
+
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    return Size { width, height };
+}
+
+fn text_input_measuring_function(
+    text_input: &NativeTextInput,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
+    }
+
+    let measured = text_input.measure(known_width, known_height);
+
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    return Size { width, height };
+}
+
+fn text_edit_measuring_function(
+    text_edit: &NativeTextEdit,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
+    }
+
+    let measured = text_edit.measure(known_width, known_height);
+
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    return Size { width, height };
+}
+
+fn custom_measuring_function(
+    custom: &dyn NativeCustomElement,
+    _style: &StyleRef,
+    known_dimensions: Size<Option<f32>>,
+    available_space: Size<taffy::AvailableSpace>,
+) -> Size<f32> {
+    let known_width = known_dimensions.width;
+    let known_height = known_dimensions.height;
+
+    if let (Some(w), Some(h)) = (known_width, known_height) {
+        return Size {
+            width: w,
+            height: h,
+        };
+    }
+
+    let measured = custom.measure_custom_size(known_width, known_height);
+
+    let width = match known_width {
+        Some(w) => w,
+        None => match available_space.width {
+            taffy::AvailableSpace::MinContent => measured.min_width,
+            taffy::AvailableSpace::MaxContent => measured.natural_width,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    let height = match known_height {
+        Some(h) => h,
+        None => match available_space.height {
+            taffy::AvailableSpace::MinContent => measured.min_height,
+            taffy::AvailableSpace::MaxContent => measured.natural_height,
+            taffy::AvailableSpace::Definite(d) => d,
+        },
+    };
+
+    return Size { width, height };
 }

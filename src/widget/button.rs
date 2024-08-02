@@ -19,6 +19,10 @@ impl Button {
         return self;
     }
 
+    pub fn set_label<S: Into<String>>(&mut self, label: S) {
+        self.tree_node.title = label.into();
+    }
+
     pub fn with_disabled(mut self, disabled: bool) -> Self {
         self.tree_node.disabled = disabled;
         return self;
@@ -31,12 +35,16 @@ impl Button {
         self.tree_node.on_click = Some(Arc::new(callback));
         return self;
     }
+
+    pub fn set_on_click<F>(&mut self, callback: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.tree_node.on_click = Some(Arc::new(callback))
+    }
 }
 
 impl NativeElement for Button {
-    fn on_state_change(&mut self, _ctx: &crate::Context) {
-        // do nothing
-    }
     fn core_component(&mut self) -> CoreComponent {
         CoreComponent::Button(Box::new(self.tree_node.clone()))
     }

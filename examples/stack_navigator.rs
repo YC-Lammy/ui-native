@@ -1,37 +1,48 @@
-use ui_native::widget::{Button, StackNavigator, Text, View};
-use ui_native::{AppBuilder, Element, ElementLike};
+use ui_native::style::{Dimension, FlexDirection, Style};
+use ui_native::widget::{Button, StackNavigator, View};
+use ui_native::{AppBuilder, Application, ElementLike};
+
+static STYLE: Style = Style {
+    flex_direction: FlexDirection::Column,
+    width: Dimension::Percent(1.0),
+    height: Dimension::Percent(1.0),
+    ..Style::DEFAULT
+};
 
 #[derive(Default)]
-pub struct MyLayout {
-    nav: StackNavigator,
+pub struct MyApp;
+
+lazy_static::lazy_static! {
+    static ref STACK: StackNavigator = StackNavigator::new();
 }
 
-impl Element for MyLayout {
-    fn render(&self) -> ElementLike {
-        let nav = self.nav.clone();
-        let nav1 = self.nav.clone();
+impl Application for MyApp {
+    fn render(&mut self) -> ElementLike {
+        let mut navigator = STACK.navigator();
 
-        Box::new(
-            View::new()
-                .with_child(Button::new().with_label("<-").with_on_click(move || {
-                    nav.goback();
-                }))
-                .with_child(
-                    self.nav
-                        .navigator()
-                        .with_screen(
-                            View::new()
-                                .with_child(Text::new("this is page1"))
-                                .with_child(Button::new().with_label("goto page2").with_on_click(
-                                    move || {
-                                        nav1.goto_index(1);
-                                    },
-                                )),
-                            Default::default(),
-                        )
-                        .with_screen(Text::new("this is page2"), Default::default()),
-                ),
-        )
+        navigator.add_page("page1", |navigator| {
+            View::new().with_style(&STYLE).with_child(
+                Button::new()
+                    .with_label("go to page2")
+                    .with_on_click(move || {
+                        // push
+                        navigator.push("page2")
+                    }),
+            )
+        });
+
+        navigator.add_page("page2", |navigator| {
+            View::new().with_style(&STYLE).with_child(
+                Button::new()
+                    .with_label("go back to page1")
+                    .with_on_click(move || {
+                        // go back
+                        navigator.goback()
+                    }),
+            )
+        });
+
+        Box::new(navigator)
     }
 }
 
@@ -41,5 +52,5 @@ fn main() {
         .build()
         .expect("failed to build app");
 
-    app.launch(|_| MyLayout::default());
+    app.launch(MyApp);
 }

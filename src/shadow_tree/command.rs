@@ -1,9 +1,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use crate::private::ElementLike;
-use crate::custom::NativeCustomElement;
-use crate::style::StyleSheet;
+use crossbeam_channel::Receiver;
+
+use crate::style::StyleRef;
+use crate::widget::flatlist::ListViewWidgetFactoryWrapper;
+use crate::{custom::NativeCustomElement, widget::flatlist::ListViewDataSourceWrapper};
 
 use super::{component::NavigatorCommand, NodeID};
 
@@ -17,14 +19,14 @@ pub enum Command {
         node: NodeID,
     },
 
-    SetStyle{
+    SetStyle {
         node: NodeID,
-        style: Arc<StyleSheet>
+        style: StyleRef,
     },
 
     ViewCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
     },
     /// add or replace child at index
     ViewSetChild {
@@ -39,21 +41,21 @@ pub enum Command {
         index: usize,
     },
 
-    ImageViewCreate{
+    ImageViewCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
     },
 
-    ScrollViewCreate{
+    ScrollViewCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
     },
-    ScrollViewRemoveChild{
-        id: NodeID
-    },
-    ScrollViewSetChild{
+    ScrollViewRemoveChild {
         id: NodeID,
-        child: NodeID
+    },
+    ScrollViewSetChild {
+        id: NodeID,
+        child: NodeID,
     },
 
     ///////////////////////////////////////
@@ -61,7 +63,7 @@ pub enum Command {
     ///////////////////////////////////////
     ButtonCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
     },
     ButtonSetLabelText {
         id: NodeID,
@@ -81,72 +83,63 @@ pub enum Command {
     /////////////////////////////////////
     TextCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
         text: String,
     },
     TextSetText {
         id: NodeID,
         text: String,
     },
-    TextSetFont {
-        id: NodeID,
-        font: String,
-    },
 
     ///////////////////////////////////////////
     /////////   Text Input commands   /////////
     ///////////////////////////////////////////
-    TextInputCreate{
+    TextInputCreate {
         id: NodeID,
-        style: Arc<StyleSheet>
+        style: StyleRef,
     },
-    TextInputSetBGText{
+    TextInputSetBGText {
         id: NodeID,
-        text: String
+        text: String,
     },
 
-    TextEditCreate{
+    TextEditCreate {
         id: NodeID,
-        style: Arc<StyleSheet>
+        style: StyleRef,
     },
-    
 
     /////////////////////////////////////////
     /////////   flatlist commands   /////////
     /////////////////////////////////////////
-    FlatListCreate {
+    ListViewCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
+        data: Arc<ListViewDataSourceWrapper>,
+        factory: Arc<ListViewWidgetFactoryWrapper>,
     },
-    FlatListSetGetItem {
-        id: NodeID,
-        /// clousure to get user item
-        get_item: Arc<dyn Fn(usize) -> Box<dyn Any> + Send + Sync>,
-    },
-    FlatListSetGetLen {
-        id: NodeID,
-        /// clousure to get len
-        get_len: Arc<dyn Fn() -> usize + Send + Sync>,
-    },
-    FlatListSetRender {
-        id: NodeID,
-        /// clousure to render item
-        render: Arc<dyn Fn(Box<dyn Any>) -> Box<dyn ElementLike> + Send + Sync>,
-    },
-    
+
+    //////////////////////////////////////////
+    /////////   stack nav commands   /////////
+    //////////////////////////////////////////
     /// create or initialise stack navigator
     StackNavigatorCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
+        command_recv: Receiver<NavigatorCommand>,
     },
-    StackNavigatorCommands {
-        node: NodeID,
-        commands: Vec<NavigatorCommand>,
+    StackNavigatorAddChild {
+        id: NodeID,
+        child: NodeID,
+        name: String,
     },
-
+    StackNavigatorRemoveChild {
+        id: NodeID,
+        child: NodeID,
+        name: String,
+    },
     CustomCreate {
         id: NodeID,
-        style: Arc<StyleSheet>,
+        style: StyleRef,
         build_fn: Arc<dyn Fn() -> Box<dyn NativeCustomElement> + Send + Sync>,
     },
     CustomCommitChanges {
@@ -167,7 +160,6 @@ impl std::fmt::Debug for Command {
             Self::ViewSetChild { index, .. } => format!("view set child {{ index:{} }}", index),
             Self::ViewRemoveChild { .. } => format!("view add child"),
             Self::TextCreate { .. } => format!("text create"),
-            Self::TextSetFont { .. } => format!("text set font"),
             Self::TextSetText { .. } => format!("text set text"),
             _ => format!(""),
         };

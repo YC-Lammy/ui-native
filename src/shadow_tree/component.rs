@@ -1,37 +1,38 @@
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
+
+use crossbeam_channel::Receiver;
 
 use crate::custom::CustomElementWrapper;
-use  crate::private::ElementLike;
-use crate::style::StyleSheet;
+use crate::style::StyleRef;
+use crate::widget::flatlist::{ListViewDataSourceWrapper, ListViewWidgetFactoryWrapper};
 
 use super::NodeID;
 
 #[derive(Default, Clone)]
 pub struct ViewNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
+    pub style: StyleRef,
     pub children: Vec<CoreComponent>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct ImageViewNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
+    pub style: StyleRef,
     pub src: (),
 }
 
 #[derive(Default, Clone)]
 pub struct ScrollViewNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
+    pub style: StyleRef,
     pub child: Option<CoreComponent>,
-
 }
 
 #[derive(Default, Clone)]
 pub struct ButtonNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
+    pub style: StyleRef,
     pub title: String,
     pub disabled: bool,
     pub on_click: Option<Arc<dyn Fn() + Send + Sync + 'static>>,
@@ -40,56 +41,47 @@ pub struct ButtonNode {
 #[derive(Debug, Default, Clone)]
 pub struct TextNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
+    pub style: StyleRef,
     pub text: String,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct TextInputNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
+    pub style: StyleRef,
     pub background_text: Option<String>,
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct TextEditNode{
+pub struct TextEditNode {
     pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>
+    pub style: StyleRef,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum NavigatorCommand {
     Goback,
-    Goto(usize),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct StackNavigaterScreenOptions {}
-
-impl Default for StackNavigaterScreenOptions {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct StackNavigaterNode {
-    pub id: NodeID,
-    pub style: Arc<StyleSheet>,
-    pub commands: Vec<NavigatorCommand>,
-    /// the component of each screen
-    pub children: Vec<CoreComponent>,
-    /// describe the stack screen
-    pub screen_options: Vec<StackNavigaterScreenOptions>,
+    Push(String),
+    Goto(String),
 }
 
 #[derive(Clone)]
-pub struct FlatListNode {
-    pub id: Option<NodeID>,
-    pub style: Arc<StyleSheet>,
-    pub get_item: Arc<dyn Fn(usize) -> Box<dyn Any> + Send + Sync>,
-    pub get_len: Arc<dyn Fn() -> usize + Sync + Send>,
-    pub render: Arc<dyn Fn(Box<dyn Any>) -> Box<dyn ElementLike> + Sync + Send>,
+pub struct StackNavigaterNode {
+    pub id: NodeID,
+    pub style: StyleRef,
+    pub command_reciever: Receiver<NavigatorCommand>,
+    /// the component of each screen
+    pub children: Vec<CoreComponent>,
+    /// describe the stack screen
+    pub child_names: Vec<String>,
+}
+
+#[derive(Clone)]
+pub struct ListViewNode {
+    pub(crate) id: Option<NodeID>,
+    pub(crate) style: StyleRef,
+    pub(crate) data: Arc<ListViewDataSourceWrapper>,
+    pub(crate) factory: Arc<ListViewWidgetFactoryWrapper>,
 }
 
 #[derive(Clone)]
@@ -103,12 +95,12 @@ pub enum CoreComponentType {
     View,
     ImageView,
     ScrollView,
+    ListView,
     Button,
     Text,
     TextInput,
     TextEdit,
     StackNavigator,
-    FlatList,
     Custom,
 }
 
@@ -123,7 +115,7 @@ pub enum CoreComponent {
     TextEdit(Box<TextEditNode>),
     StackNavigator(Box<StackNavigaterNode>),
 
-    FlatList(Box<FlatListNode>),
+    ListView(Box<ListViewNode>),
 
     Custom(Box<CustomNode>),
 }
@@ -138,7 +130,7 @@ impl CoreComponent {
             Self::Text(_) => CoreComponentType::Text,
             Self::TextInput(_) => CoreComponentType::TextInput,
             Self::TextEdit(_) => CoreComponentType::TextEdit,
-            Self::FlatList(_) => CoreComponentType::FlatList,
+            Self::ListView(_) => CoreComponentType::ListView,
             Self::StackNavigator(_) => CoreComponentType::StackNavigator,
             Self::Custom(_) => CoreComponentType::Custom,
         }
@@ -153,7 +145,7 @@ impl CoreComponent {
             Self::TextInput(t) => t.id,
             Self::TextEdit(t) => t.id,
             Self::StackNavigator(n) => Some(n.id),
-            Self::FlatList(f) => f.id,
+            Self::ListView(f) => f.id,
             Self::Custom(c) => c.id,
         }
     }
@@ -161,9 +153,9 @@ impl CoreComponent {
     pub fn child_mut(&mut self) -> &mut [CoreComponent] {
         match self {
             Self::View(v) => &mut v.children,
-            Self::ScrollView(v) => match &mut v.child{
+            Self::ScrollView(v) => match &mut v.child {
                 Some(c) => core::slice::from_mut(c),
-                None => &mut []
+                None => &mut [],
             },
             Self::StackNavigator(s) => &mut s.children,
             Self::Custom(c) => c.wrapper.children_mut(),
@@ -172,16 +164,16 @@ impl CoreComponent {
             | Self::Text(_)
             | Self::TextInput(_)
             | Self::TextEdit(_)
-            | Self::FlatList(_) => &mut [],
+            | Self::ListView(_) => &mut [],
         }
     }
 
     pub fn child(&self) -> &[CoreComponent] {
         match self {
             Self::View(v) => &v.children,
-            Self::ScrollView(v) => match &v.child{
+            Self::ScrollView(v) => match &v.child {
                 Some(c) => core::slice::from_ref(c),
-                None => &mut []
+                None => &mut [],
             },
             Self::StackNavigator(s) => &s.children,
             Self::Custom(c) => c.wrapper.children(),
@@ -190,7 +182,7 @@ impl CoreComponent {
             | Self::Text(_)
             | Self::TextInput(_)
             | Self::TextEdit(_)
-            | Self::FlatList(_) => &mut [],
+            | Self::ListView(_) => &mut [],
         }
     }
 }

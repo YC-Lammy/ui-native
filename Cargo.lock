@@ -1050,6 +1050,7 @@ dependencies = [
  "iota",
  "jni",
  "lazy_static",
+ "pango",
  "parking_lot",
  "paste",
  "serde",

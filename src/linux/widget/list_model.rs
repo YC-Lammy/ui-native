@@ -1,19 +1,22 @@
-use std::any::Any;
+use std::{any::Any, sync::Arc};
 
 use glib::subclass::types::ObjectSubclassExt;
 
+use crate::widget::flatlist::ListViewDataSourceWrapper;
+
 mod imp_model {
-    use core::any::Any;
     use std::cell::RefCell;
+    use std::sync::Arc;
 
     use glib::subclass::{object::ObjectImpl, types::ObjectSubclass};
     use glib::types::StaticType;
     use gtk4::{gio::ListModel, subclass::prelude::ListModelImpl};
 
+    use crate::widget::flatlist::ListViewDataSourceWrapper;
+
     #[derive(Default)]
     pub struct GtkNativeListModel {
-        pub(super) get_item: RefCell<Option<Box<dyn Fn(usize) -> Option<Box<dyn Any>>>>>,
-        pub(super) get_len: RefCell<Option<Box<dyn Fn() -> usize>>>,
+        pub(super) inner: RefCell<Option<Arc<ListViewDataSourceWrapper>>>,
     }
 
     #[glib::object_subclass]
@@ -30,19 +33,17 @@ mod imp_model {
             super::GtkNativeListItem::static_type()
         }
         fn item(&self, position: u32) -> Option<glib::Object> {
-            let inner = self.get_item.borrow();
+            let inner = self.inner.borrow();
 
-            let value = match inner.as_ref() {
-                Some(g) => g(position as usize)?,
-                None => return None,
-            };
+            let value = inner.as_ref()?.get(position as _)?;
 
             return Some(super::GtkNativeListItem::new(position, value).into());
         }
         fn n_items(&self) -> u32 {
-            let g = self.get_len.borrow();
-            match g.as_ref() {
-                Some(l) => l() as u32,
+            let inner = self.inner.borrow();
+
+            match inner.as_ref() {
+                Some(src) => src.len() as u32,
                 None => 0,
             }
         }
@@ -55,15 +56,11 @@ glib::wrapper! {
 }
 
 impl GtkNativeListModel {
-    pub fn new(
-        get_item: Box<dyn Fn(usize) -> Option<Box<dyn Any>>>,
-        get_len: Box<dyn Fn() -> usize>,
-    ) -> Self {
+    pub(crate) fn new(src: Arc<ListViewDataSourceWrapper>) -> Self {
         let obj = glib::Object::new();
 
         let model = imp_model::GtkNativeListModel::from_obj(&obj);
-        model.get_item.borrow_mut().replace(get_item);
-        model.get_len.borrow_mut().replace(get_len);
+        model.inner.borrow_mut().replace(src);
 
         return obj;
     }

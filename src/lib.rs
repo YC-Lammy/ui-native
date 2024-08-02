@@ -1,4 +1,4 @@
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -8,7 +8,6 @@ mod context;
 pub mod custom;
 mod native_tree;
 mod shadow_tree;
-pub mod state;
 pub mod style;
 pub mod widget;
 
@@ -24,19 +23,12 @@ use parking_lot::Mutex;
 #[cfg(target_family = "wasm")]
 use web as imp;
 
-pub use app::{App, AppBuilder};
+pub use app::{App, AppBuilder, Application};
 pub use context::Context;
-pub use state::State;
 
 pub type ElementLike = Box<dyn private::ElementLike>;
 
 pub trait Element {
-    /// elements are responsible for checking
-    /// whether state change affects itself.
-    /// It is also responsible for calling `on_state_change` on any child element.
-    ///
-    /// element should call `context.request_redraw()` if redraw is needed
-    fn on_state_change(&self, _ctx: &Context) {}
     /// called when element is being rendered
     fn render(&self) -> ElementLike;
 }
@@ -50,7 +42,6 @@ mod private {
     /// native element can not be implemented by client therefore kept private.
     /// `on_render` must not be called outside of the main thread, it will cause a panic.
     pub trait NativeElement {
-        fn on_state_change(&mut self, ctx: &Context);
         fn render(&mut self);
         fn core_component(&mut self) -> CoreComponent;
     }
@@ -58,14 +49,6 @@ mod private {
     pub trait ElementLike: 'static {
         fn as_native(&mut self) -> Option<&mut dyn NativeElement>;
         fn as_element(&mut self) -> Option<&mut dyn Element>;
-        fn on_state_change(&mut self, ctx: &Context) {
-            if let Some(e) = self.as_native() {
-                e.on_state_change(ctx);
-            }
-            if let Some(e) = self.as_element() {
-                e.on_state_change(ctx);
-            }
-        }
         fn render(&mut self) -> Result<CoreComponent, Box<dyn ElementLike>> {
             if let Some(e) = self.as_native() {
                 e.render();
@@ -90,15 +73,18 @@ mod private {
         }
     }
 
-    impl<T: ElementLike> From<T> for Box<dyn ElementLike>{
+    impl<T: ElementLike> From<T> for Box<dyn ElementLike> {
         fn from(value: T) -> Self {
             Box::new(value)
         }
     }
 }
 
-pub fn clousure_once<F>(f: F) -> Arc<dyn Fn() + Send + Sync> where F: Fn() + Send + Sync + 'static{
-    lazy_static::lazy_static!{
+pub fn clousure_once<F>(f: F) -> Arc<dyn Fn() + Send + Sync>
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    lazy_static::lazy_static! {
         static ref TYPE_MAP: Mutex<HashMap<(TypeId, u64), usize>> = Mutex::new(HashMap::new());
     }
 
@@ -106,41 +92,37 @@ pub fn clousure_once<F>(f: F) -> Arc<dyn Fn() + Send + Sync> where F: Fn() + Sen
 
     let type_id = TypeId::of::<F>();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    unsafe{
-        let data = core::slice::from_raw_parts(
-            &f as *const F as *const u8, 
-            core::mem::size_of::<F>()
-        );
+    unsafe {
+        let data =
+            core::slice::from_raw_parts(&f as *const F as *const u8, core::mem::size_of::<F>());
         data.hash(&mut hasher);
     };
     let hash = hasher.finish();
 
-    match type_map.get(&(type_id, hash)){
-        Some(c) => unsafe{
+    match type_map.get(&(type_id, hash)) {
+        Some(c) => unsafe {
             let ptr = *c as *const F;
             Arc::increment_strong_count(ptr);
 
             let a = Arc::from_raw(ptr);
-            
-            return a as _
-        }
+
+            return a as _;
+        },
         None => {
             let f = Arc::new(f);
             let b = f.clone();
 
             type_map.insert((type_id, hash), Arc::into_raw(b) as usize);
 
-            return f as _
+            return f as _;
         }
     };
 }
 
 #[test]
-fn test_closure_once(){
-    for _ in 0..10{
-        let c = clousure_once(move ||{
-
-        });
+fn test_closure_once() {
+    for _ in 0..10 {
+        let c = clousure_once(move || {});
 
         println!("{}", c.as_ref() as *const _ as *const u8 as usize);
     }

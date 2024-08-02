@@ -1,42 +1,21 @@
 pub mod button;
 pub mod flatlist;
+pub mod input;
+pub mod scrollview;
 pub mod stack_navigator;
 pub mod text;
-pub mod view;
-pub mod scrollview;
-pub mod input;
 pub mod text_edit;
+pub mod view;
 
 pub use button::Button;
+pub use flatlist::ListView;
+pub use input::TextInput;
 pub use stack_navigator::{StackNavigator, StackNavigatorElement};
 pub use text::Text;
-pub use view::View;
-pub use input::TextInput;
 pub use text_edit::TextEdit;
+pub use view::View;
 
 use crate::private::ElementLike;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum FlexDirection {
-    Column,
-    Row,
-}
-
-pub enum AlignContent {
-    Centre,
-    Start,
-    End,
-    Stretch,
-}
-
-pub enum AlignItems {
-    Centre,
-    Start,
-    End,
-    Stretch,
-    Baseline,
-}
-
 pub trait BuildableWidget {
     type Builder: WidgetBuilder<Widget = Self>;
     fn builder() -> Self::Builder;

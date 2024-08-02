@@ -2,112 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::custom::NativeCustomElement;
-use crate::imp::{NativeButton, NativeElement, NativeFlatList, NativeText, NativeView, NativeImageView, NativeScrollView, NativeTextInput, NativeTextEdit};
+use crate::imp::{
+    NativeButton, NativeImageView, NativeListView, NativeScrollView, NativeStackNavigator,
+    NativeText, NativeTextEdit, NativeTextInput, NativeView,
+};
 use crate::shadow_tree::{command::Command, NodeID};
-use crate::style::StyleSheet;
 
-pub mod traits;
 pub mod layout;
+pub mod node;
+pub mod style;
+pub mod traits;
 
+use node::{NativeComponent, NativeNode};
 pub use traits::*;
-
-pub enum NativeComponent {
-    View(NativeView),
-    ImageView(NativeImageView),
-    ScrollView(NativeScrollView),
-    Button(NativeButton),
-    Text(NativeText),
-    TextInput(NativeTextInput),
-    TextEdit(NativeTextEdit),
-    StackNavigator(),
-
-    FlatList(NativeFlatList),
-    Custom(Box<dyn NativeCustomElement>),
-}
-
-impl NativeComponent {
-    pub fn widget(&self) -> &dyn NativeElement {
-        match self {
-            Self::View(v) => v,
-            Self::ImageView(i) => i,
-            Self::ScrollView(s) => s,
-            Self::Button(b) => b,
-            Self::Text(t) => t,
-            Self::TextInput(t) => t,
-            Self::TextEdit(t) => t,
-            Self::FlatList(f) => f,
-            Self::Custom(c) => c.as_native_element(),
-            _ => todo!(),
-        }
-    }
-
-    pub fn is_scroll_view(&self) -> bool{
-        match self{
-            Self::ScrollView(_) => true,
-            _ => false
-        }
-    }
-
-    pub fn set_width(&self, width: f32) {
-        match self {
-            Self::View(v) => v.set_width(width),
-            Self::ImageView(i) => i.set_width(width),
-            Self::ScrollView(s) => s.set_width(width),
-            Self::Button(b) => b.set_width(width),
-            Self::Text(t) => t.set_width(width),
-            Self::TextInput(t) => t.set_width(width),
-            Self::TextEdit(t) => t.set_width(width),
-            Self::FlatList(f) => f.set_width(width as _),
-            Self::Custom(c) => c.set_custom_width(width),
-            _ => todo!(),
-        }
-    }
-
-    pub fn set_height(&self, height: f32) {
-        match self {
-            Self::View(v) => v.set_height(height as _),
-            Self::ImageView(i) => i.set_height(height),
-            Self::ScrollView(s) => s.set_height(height),
-            Self::Button(b) => b.set_height(height),
-            Self::Text(t) => t.set_height(height as _),
-            Self::TextInput(t) => t.set_height(height),
-            Self::TextEdit(t) => t.set_height(height),
-            Self::FlatList(f) => f.set_height(height as _),
-            Self::Custom(c) => c.set_custom_height(height),
-            _ => todo!(),
-        }
-    }
-
-    pub fn set_child_position(&self, child: &NativeComponent, x: f32, y: f32) {
-        match self {
-            Self::View(v) => v.set_child_position(child.widget(), x, y),
-            Self::ScrollView(_) => {}
-            _ => todo!(),
-        }
-    }
-
-    pub fn set_visible(&self, visible: bool) {
-        match self {
-            Self::View(v) => v.set_visible(visible),
-            Self::Button(b) => b.set_visible(visible),
-            Self::Text(t) => t.set_visible(visible),
-            _ => todo!(),
-        }
-    }
-}
-
-pub struct NativeNode {
-    parent: Option<NodeID>,
-    children: Vec<NodeID>,
-    component: Arc<NativeComponent>,
-    style: Arc<StyleSheet>
-}
-
-impl NativeNode {
-    pub fn component(&self) -> &NativeComponent {
-        &self.component
-    }
-}
 
 pub struct NativeTree {
     nodes: HashMap<NodeID, NativeNode>,
@@ -167,7 +74,7 @@ impl NativeTree {
         }
     }
 
-    fn get_scroll_view(&self, id: NodeID) -> (&NativeNode, &NativeScrollView){
+    fn get_scroll_view(&self, id: NodeID) -> (&NativeNode, &NativeScrollView) {
         match self.nodes.get(&id) {
             Some(node) => {
                 if let NativeComponent::ScrollView(v) = node.component.as_ref() {
@@ -208,6 +115,20 @@ impl NativeTree {
         }
     }
 
+    /// aux function to get known stack
+    fn get_stack_nav(&self, id: NodeID) -> (&NativeNode, &NativeStackNavigator) {
+        match self.nodes.get(&id) {
+            Some(node) => {
+                if let NativeComponent::StackNavigator(t) = node.component.as_ref() {
+                    return (&node, &t);
+                } else {
+                    unreachable!()
+                }
+            }
+            None => unreachable!(),
+        }
+    }
+
     /// aux function to get known custom node
     fn get_custom(&self, id: NodeID) -> (&NativeNode, &dyn NativeCustomElement) {
         match self.nodes.get(&id) {
@@ -230,26 +151,30 @@ impl NativeTree {
                 Command::MountRoot { node } => {
                     self.root = Some(node);
                 }
-                Command::RemoveNode { node } => {
-                    self.nodes.remove(&node);
+                Command::RemoveNode { node: id } => {
+                    let node = self.nodes.remove(&id).expect("invalid node");
+
+                    // should retain if navigator or scroll view is valid
+                    if node.component.should_retain() {
+                        self.nodes.insert(id, node);
+                    }
                 }
                 Command::SetStyle { node, style } => {
                     let node = self.nodes.get_mut(&node).unwrap();
-                    // set all the fields as updated
-                    style.set_owned_as_modified();
+
+                    // set the layout style
+                    node.layout_style = style.to_taffy_style();
                     // set the style
                     node.style = style;
                 }
                 // button commands
-                Command::ButtonCreate { id, style} => {
+                Command::ButtonCreate { id, style } => {
                     self.nodes.insert(
                         id,
-                        NativeNode {
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::Button(NativeButton::new())),
-                            style
-                        },
+                        NativeNode::new(
+                            Arc::new(NativeComponent::Button(NativeButton::new())),
+                            style,
+                        ),
                     );
                 }
                 Command::ButtonSetDisabled { id, disabled } => {
@@ -265,16 +190,11 @@ impl NativeTree {
                     b.set_on_click(on_click);
                 }
 
-                Command::ViewCreate { id, style} => {
+                Command::ViewCreate { id, style } => {
                     // create view node
                     self.nodes.insert(
                         id,
-                        NativeNode {
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::View(NativeView::new())),
-                            style
-                        },
+                        NativeNode::new(Arc::new(NativeComponent::View(NativeView::new())), style),
                     );
                 }
                 Command::ViewRemoveChild { id, child, index } => {
@@ -306,29 +226,25 @@ impl NativeTree {
                     child_node.parent = Some(id);
                 }
 
-                Command::ImageViewCreate { id, style} => {
+                Command::ImageViewCreate { id, style } => {
                     self.nodes.insert(
-                        id, 
-                        NativeNode{
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::ImageView(NativeImageView::new())),
-                            style
-                        }
+                        id,
+                        NativeNode::new(
+                            Arc::new(NativeComponent::ImageView(NativeImageView::new())),
+                            style,
+                        ),
                     );
-                },
+                }
 
-                Command::ScrollViewCreate { id, style} => {
+                Command::ScrollViewCreate { id, style } => {
                     self.nodes.insert(
-                        id, 
-                        NativeNode { 
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::ScrollView(NativeScrollView::new())), 
-                            style
-                        }
+                        id,
+                        NativeNode::new(
+                            Arc::new(NativeComponent::ScrollView(NativeScrollView::new())),
+                            style,
+                        ),
                     );
-                },
+                }
                 Command::ScrollViewRemoveChild { id } => {
                     let (_node, view) = self.get_scroll_view(id);
 
@@ -349,17 +265,17 @@ impl NativeTree {
 
                     // set the child into view
                     view.set_child(child_node.component().widget());
-                    
+
                     // get the mutable child node
                     let child_node = self.nodes.get_mut(&id).expect("invalid node id");
                     // set the parent as scroll view
                     child_node.parent = Some(id);
-                    
+
                     // get the mutable node of scroll view
                     let node = self.nodes.get_mut(&id).expect("invalid node id");
-                    
+
                     // register child node
-                    match node.children.get_mut(0){
+                    match node.children.get_mut(0) {
                         Some(c) => *c = child,
                         None => node.children.push(child.clone()),
                     }
@@ -369,73 +285,123 @@ impl NativeTree {
                     // create text node
                     self.nodes.insert(
                         id,
-                        NativeNode {
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::Text(NativeText::new(&text))),
-                            style
-                        },
+                        NativeNode::new(
+                            Arc::new(NativeComponent::Text(NativeText::new(&text))),
+                            style,
+                        ),
                     );
                 }
                 Command::TextSetText { id, text } => {
                     let (_node, t) = self.get_text(id);
                     t.set_text(&text);
                 }
-                Command::TextSetFont { id, font } => {
-                    let (_node, t) = self.get_text(id);
-                    t.set_font(&font);
-                }
-
                 Command::TextInputCreate { id, style } => {
                     // create the input node
                     self.nodes.insert(
-                        id, 
-                        NativeNode{
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::TextInput(NativeTextInput::new())),
-                            style
-                        }
+                        id,
+                        NativeNode::new(
+                            Arc::new(NativeComponent::TextInput(NativeTextInput::new())),
+                            style,
+                        ),
                     );
-                },
+                }
                 Command::TextInputSetBGText { id, text } => {
                     let (_node, input) = self.get_text_input(id);
                     input.set_background_text(&text);
-                },
-
+                }
 
                 Command::TextEditCreate { id, style } => {
                     self.nodes.insert(
-                        id, 
-                        NativeNode{
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::TextEdit(NativeTextEdit::new())),
-                            style
-                        }
+                        id,
+                        NativeNode::new(
+                            Arc::new(NativeComponent::TextEdit(NativeTextEdit::new())),
+                            style,
+                        ),
                     );
                 }
 
-                Command::CustomCreate { id, style, build_fn } => {
+                Command::ListViewCreate {
+                    id,
+                    style,
+                    data,
+                    factory,
+                } => {
+                    self.nodes.insert(
+                        id,
+                        NativeNode::new(
+                            Arc::new(NativeComponent::ListView(NativeListView::new(
+                                data, factory,
+                            ))),
+                            style,
+                        ),
+                    );
+                }
+
+                Command::StackNavigatorCreate {
+                    id,
+                    style,
+                    command_recv,
+                } => {
+                    self.nodes.insert(
+                        id,
+                        NativeNode::new(
+                            Arc::new(NativeComponent::StackNavigator(NativeStackNavigator::new(
+                                command_recv,
+                            ))),
+                            style,
+                        ),
+                    );
+                }
+                Command::StackNavigatorAddChild { id, child, name } => {
+                    let (_node, nav) = self.get_stack_nav(id);
+
+                    nav.add_child(
+                        self.nodes.get(&child).unwrap().component.widget(),
+                        &name,
+                        child,
+                    );
+
+                    let node = self.nodes.get_mut(&id).unwrap();
+                    node.children.push(child);
+
+                    let child_node = self.nodes.get_mut(&child).unwrap();
+                    child_node.parent = Some(id);
+                }
+                Command::StackNavigatorRemoveChild { id, child, name } => {
+                    let (_node, nav) = self.get_stack_nav(id);
+
+                    nav.remove_child(&name);
+
+                    let node = self.nodes.get_mut(&id).unwrap();
+
+                    for (i, c) in node.children.iter().enumerate() {
+                        if *c == child {
+                            node.children.remove(i);
+                            break;
+                        }
+                    }
+
+                    let child_node = self.nodes.get_mut(&child).unwrap();
+                    child_node.parent = None;
+                }
+
+                Command::CustomCreate {
+                    id,
+                    style,
+                    build_fn,
+                } => {
                     // create custom element
                     let custom = build_fn();
                     // create custom node
                     self.nodes.insert(
                         id,
-                        NativeNode {
-                            parent: None,
-                            children: Vec::new(),
-                            component: Arc::new(NativeComponent::Custom(custom)),
-                            style
-                        },
+                        NativeNode::new(Arc::new(NativeComponent::Custom(custom)), style),
                     );
                 }
                 Command::CustomCommitChanges { id, changes } => {
                     let (_node, custom) = self.get_custom(id);
                     custom.commit_custom_changes(changes);
                 }
-
-                _ => todo!(),
             }
         }
     }

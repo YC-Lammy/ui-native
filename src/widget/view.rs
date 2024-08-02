@@ -1,22 +1,19 @@
-use std::sync::Arc;
-
 use crate::private::{ElementLike, NativeElement};
 use crate::shadow_tree::component::{CoreComponent, ViewNode};
-use crate::style::{StyleSheet, DEFAULT_STYLESHEET_ARC};
-use crate::Context;
+use crate::style::StyleRef;
 
 pub struct View {
-    style: Arc<StyleSheet>,
+    style: StyleRef,
     children: Vec<Box<dyn ElementLike>>,
-    rendered_children: Vec<CoreComponent>
+    rendered_children: Vec<CoreComponent>,
 }
 
 impl View {
     pub fn new() -> Self {
         Self {
-            style: DEFAULT_STYLESHEET_ARC.clone(),
+            style: StyleRef::DEFAULT,
             children: Vec::new(),
-            rendered_children: Vec::new()
+            rendered_children: Vec::new(),
         }
     }
     pub fn with_child<T>(mut self, child: T) -> Self
@@ -38,33 +35,25 @@ impl View {
         self.children.push(child)
     }
 
-    pub fn with_style(mut self, style: Arc<StyleSheet>) -> Self{
+    pub fn with_style<S: Into<StyleRef>>(mut self, style: S) -> Self {
         self.set_style(style);
-        return self
+        return self;
     }
 
-    pub fn set_style(&mut self, style: Arc<StyleSheet>){
-        self.style = style;
+    pub fn set_style<S: Into<StyleRef>>(&mut self, style: S) {
+        self.style = style.into();
     }
 }
 
 impl NativeElement for View {
-    fn on_state_change(&mut self, ctx: &Context) {
-        for child in &mut self.children {
-            child.on_state_change(ctx);
-        }
-    }
-
     fn core_component(&mut self) -> CoreComponent {
         let children = core::mem::replace(&mut self.rendered_children, Vec::new());
 
-        CoreComponent::View(Box::new(
-            ViewNode{
-                id: None,
-                style: self.style.clone(),
-                children: children
-            }
-        ))
+        CoreComponent::View(Box::new(ViewNode {
+            id: None,
+            style: self.style.clone(),
+            children: children,
+        }))
     }
 
     fn render(&mut self) {

@@ -1,21 +1,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crossbeam_channel::{Receiver, Sender};
 use gtk4::prelude::{ApplicationExt, ApplicationExtManual, GtkWindowExt, WidgetExt};
 use gtk4::ApplicationWindow;
 use parking_lot::RwLock;
-use crossbeam_channel::{Receiver, Sender};
 
+use crate::app::Application;
 use crate::native_tree::NativeTree;
-use crate::private::ElementLike;
 use crate::shadow_tree::command::Command;
 use crate::shadow_tree::commit::commit_tree;
 use crate::shadow_tree::component::CoreComponent;
-use crate::state::GLOBAL_STATE_CHANGED;
-use crate::Context;
 
 pub struct GtkApp {
     app: gtk4::Application,
@@ -64,11 +61,7 @@ impl GtkApp {
         }
     }
 
-    pub fn launch<T, F>(self, on_active: F)
-    where
-        F: Fn(&Context) -> T + Send + Sync + 'static,
-        T: ElementLike,
-    {
+    pub fn launch<A: Application>(self, mut app: A) {
         let width = self.width;
         let height = self.height;
         let title = self.title;
@@ -112,18 +105,10 @@ impl GtkApp {
 
         // create new thread for rendering
         std::thread::spawn(move || {
-            // create new context
-            let ctx = Context::new();
-
             // indefinite loop for rendering
             loop {
                 // call on active
-                let mut widget = on_active(&ctx);
-
-                // a global state change
-                if GLOBAL_STATE_CHANGED.load(Ordering::SeqCst) {
-                    widget.on_state_change(&Context::new())
-                }
+                let mut widget = app.render();
 
                 // render the widget
                 let mut elem = widget.render();
@@ -195,20 +180,22 @@ impl GtkApp {
 
                 // recalculate layout
                 native_tree.compute_layout(window.width() as _, window.height() as _);
+                // recalculate the style
+                native_tree.compute_style();
 
                 // get the root view from native tree
                 if let Some(root) = native_tree.get_root_node() {
                     // get the gtk widget
                     let widget = root.widget().as_gtk4_widget();
 
-                    if let Some(w) = &last_child{
+                    if let Some(w) = &last_child {
                         // set the child if not the same widget
-                        if w != widget{
+                        if w != widget {
                             //println!("set child");
                             root_view.set_child(Some(widget));
                             last_child = Some(widget.clone());
                         }
-                    } else{
+                    } else {
                         root_view.set_child(Some(widget));
                         last_child = Some(widget.clone());
                     }
