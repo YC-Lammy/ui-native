@@ -1,5 +1,6 @@
 pub mod button;
 pub mod flatlist;
+pub mod image_view;
 pub mod input;
 pub mod scrollview;
 pub mod stack_navigator;
@@ -9,7 +10,9 @@ pub mod view;
 
 pub use button::Button;
 pub use flatlist::ListView;
+pub use image_view::ImageView;
 pub use input::TextInput;
+pub use scrollview::ScrollView;
 pub use stack_navigator::{StackNavigator, StackNavigatorElement};
 pub use text::Text;
 pub use text_edit::TextEdit;

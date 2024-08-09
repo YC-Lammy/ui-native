@@ -1,9 +1,9 @@
 pub mod button;
 pub mod image_view;
 pub mod input;
+pub mod navigator;
 pub mod scroll_view;
 pub mod stack_navigator;
-pub mod navigator;
 pub mod text;
 pub mod text_edit;
 pub mod view;
@@ -11,6 +11,7 @@ pub mod view;
 pub mod list_item_widget;
 pub mod list_model;
 pub mod list_view;
+pub mod paintable;
 
 use std::any::Any;
 

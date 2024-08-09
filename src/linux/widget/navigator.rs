@@ -1,37 +1,37 @@
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 
-use gtk4::prelude::*;
 use crossbeam_channel::{Receiver, TryRecvError};
+use gtk4::prelude::*;
 
 use crate::custom::MeasuredSize;
-use crate::native_tree::{NativeNavigatorImp, NativeStyledElement};
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, NativeNavigatorImp, NativeStyledElement};
 use crate::shadow_tree::component::NavigatorCommand;
 use crate::shadow_tree::NodeID;
 use crate::style::*;
 
 use super::NativeElement;
 
-
 struct NavigatorState {
     dropped: bool,
     children: Vec<(String, NodeID)>,
 }
 
-pub struct NativeNavigator{
+pub struct NativeNavigator {
     stack: gtk4::Stack,
-    state: Rc<RefCell<NavigatorState>>
+    state: Rc<RefCell<NavigatorState>>,
 }
 
-impl NativeElement for NativeNavigator{
+impl NativeElement for NativeNavigator {
     fn as_gtk4_widget(&self) -> &gtk4::Widget {
         self.stack.as_ref()
     }
 }
 
-impl NativeNavigatorImp for NativeNavigator{
-    fn new(command_recv: Receiver<NavigatorCommand>) -> Self {
+impl NativeNavigatorImp for NativeNavigator {
+    fn new(_ctx: &mut Context, command_recv: Receiver<NavigatorCommand>) -> Self {
         // constuct the state
         let state = Rc::new(RefCell::new(NavigatorState {
             dropped: false,
@@ -57,14 +57,12 @@ impl NativeNavigatorImp for NativeNavigator{
                     Ok(cmd) => match cmd {
                         NavigatorCommand::Goto(name) => {
                             // find the id of page
-                            if let Some(_) =
-                                state.children.iter().find(|(n, _p)| n == &name)
-                            {
+                            if let Some(_) = state.children.iter().find(|(n, _p)| n == &name) {
                                 // set the page
                                 stack1.set_visible_child_name(&name);
                             }
                         }
-                        _ => unimplemented!()
+                        _ => unimplemented!(),
                     },
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => {
@@ -83,7 +81,7 @@ impl NativeNavigatorImp for NativeNavigator{
         }
     }
 
-    fn add_child(&self, child: &dyn NativeElement, name: &str, id: NodeID) {
+    fn add_child(&self, _ctx: &mut Context, child: &dyn NativeElement, name: &str, id: NodeID) {
         // add the named page
         let _page = self.stack.add_named(child.as_gtk4_widget(), Some(name));
 
@@ -94,7 +92,7 @@ impl NativeNavigatorImp for NativeNavigator{
         state.children.push((name.to_string(), id));
 
         // if no child is visible, set as the first child
-        if self.stack.visible_child().is_none(){
+        if self.stack.visible_child().is_none() {
             if let Some((name, _)) = state.children.first() {
                 // set the page
                 self.stack
@@ -103,7 +101,7 @@ impl NativeNavigatorImp for NativeNavigator{
         }
     }
 
-    fn remove_child(&self, name: &str) {
+    fn remove_child(&self, _ctx: &mut Context, name: &str) {
         if let Some(w) = self.stack.child_by_name(name) {
             self.stack.remove(&w);
 
@@ -118,25 +116,33 @@ impl NativeNavigatorImp for NativeNavigator{
         }
     }
 
-    fn visible_child(&self) -> Option<NodeID> {
+    fn visible_child(&self, _ctx: &mut Context) -> Option<NodeID> {
         let state = self.state.borrow();
 
         let name = self.stack.visible_child_name()?;
 
-        if let Some((_, id)) = state.children.iter().find(|(n, _)|n == &name){
-            return Some(*id)
+        if let Some((_, id)) = state.children.iter().find(|(n, _)| n == &name) {
+            return Some(*id);
         }
 
-        return None
+        return None;
     }
 
-    fn should_retain(&self) -> bool {
+    fn should_retain(&self, _ctx: &mut Context) -> bool {
         let state = self.state.borrow();
 
         return !state.dropped;
     }
 
-    fn layout_child(&self, child: &dyn NativeElement, _x: f32, _y: f32, width: f32, height: f32) {
+    fn layout_child(
+        &self,
+        _ctx: &mut Context,
+        child: &dyn NativeElement,
+        _x: f32,
+        _y: f32,
+        width: f32,
+        height: f32,
+    ) {
         let w = child.as_gtk4_widget();
         w.set_width_request(width as i32);
         w.set_height_request(height as i32);
@@ -144,26 +150,39 @@ impl NativeNavigatorImp for NativeNavigator{
 }
 
 impl NativeStyledElement for NativeNavigator {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.stack.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.stack.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.stack.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

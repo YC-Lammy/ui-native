@@ -6,7 +6,8 @@ use crossbeam_channel::{Receiver, TryRecvError};
 use gtk4::prelude::*;
 
 use crate::custom::MeasuredSize;
-use crate::native_tree::{NativeStackNavigatorImp, NativeStyledElement};
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, NativeStackNavigatorImp, NativeStyledElement};
 use crate::shadow_tree::component::NavigatorCommand;
 use crate::shadow_tree::NodeID;
 use crate::style::*;
@@ -31,7 +32,7 @@ impl NativeElement for NativeStackNavigator {
 }
 
 impl NativeStackNavigatorImp for NativeStackNavigator {
-    fn new(command_recv: Receiver<NavigatorCommand>) -> Self {
+    fn new(_ctx: &mut Context, command_recv: Receiver<NavigatorCommand>) -> Self {
         // constuct the state
         let state = Rc::new(RefCell::new(StackNavigatorState {
             dropped: false,
@@ -131,7 +132,7 @@ impl NativeStackNavigatorImp for NativeStackNavigator {
         }
     }
 
-    fn add_child(&self, child: &dyn NativeElement, name: &str, id: NodeID) {
+    fn add_child(&self, _ctx: &mut Context, child: &dyn NativeElement, name: &str, id: NodeID) {
         // add the named page
         let _page = self.stack.add_named(child.as_gtk4_widget(), Some(name));
 
@@ -155,7 +156,7 @@ impl NativeStackNavigatorImp for NativeStackNavigator {
         }
     }
 
-    fn remove_child(&self, name: &str) {
+    fn remove_child(&self, _ctx: &mut Context, name: &str) {
         if let Some(w) = self.stack.child_by_name(name) {
             self.stack.remove(&w);
 
@@ -175,19 +176,27 @@ impl NativeStackNavigatorImp for NativeStackNavigator {
         }
     }
 
-    fn visible_child(&self) -> Option<NodeID> {
+    fn visible_child(&self, _ctx: &mut Context) -> Option<NodeID> {
         let state = self.state.borrow();
 
         state.history.last().map(|id| *id)
     }
 
-    fn should_retain(&self) -> bool {
+    fn should_retain(&self, _ctx: &mut Context) -> bool {
         let state = self.state.borrow();
 
         return !state.dropped;
     }
 
-    fn layout_child(&self, child: &dyn NativeElement, _x: f32, _y: f32, width: f32, height: f32) {
+    fn layout_child(
+        &self,
+        _ctx: &mut Context,
+        child: &dyn NativeElement,
+        _x: f32,
+        _y: f32,
+        width: f32,
+        height: f32,
+    ) {
         let w = child.as_gtk4_widget();
         w.set_width_request(width as i32);
         w.set_height_request(height as i32);
@@ -195,26 +204,39 @@ impl NativeStackNavigatorImp for NativeStackNavigator {
 }
 
 impl NativeStyledElement for NativeStackNavigator {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.stack.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.stack.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.stack.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

@@ -9,6 +9,7 @@ use gtk4::ApplicationWindow;
 use parking_lot::RwLock;
 
 use crate::app::Application;
+use crate::native_tree::context::Context;
 use crate::native_tree::NativeTree;
 use crate::shadow_tree::command::Command;
 use crate::shadow_tree::commit::commit_tree;
@@ -156,8 +157,11 @@ impl GtkApp {
 
         let app_inner = self.inner.clone();
 
+        // just a dummy context
+        let mut ctx = Context::<'static>::dummy();
+
         // create a new native tree
-        let native_tree = NativeTree::get();
+        let native_tree = NativeTree::get(&mut ctx);
 
         let mut last_child: Option<gtk4::Widget> = None;
 
@@ -170,7 +174,7 @@ impl GtkApp {
             while let Ok(commands) = app_inner.command_receiver.try_recv() {
                 commands_recieved = true;
                 // execute commands
-                native_tree.execute_commands(commands);
+                native_tree.execute_commands(&mut Context::dummy(), commands);
             }
 
             // only need to check root if any command has been made
@@ -179,7 +183,11 @@ impl GtkApp {
                 let window = window.as_ref().unwrap();
 
                 // recalculate layout
-                native_tree.compute_layout(window.width() as _, window.height() as _);
+                native_tree.compute_layout(
+                    &mut Context::dummy(),
+                    window.width() as _,
+                    window.height() as _,
+                );
                 // recalculate the style
                 native_tree.compute_style();
 

@@ -8,34 +8,56 @@ use crate::imp::{
 };
 use crate::shadow_tree::{command::Command, NodeID};
 
+pub mod context;
 pub mod layout;
 pub mod node;
 pub mod style;
 pub mod traits;
 
+use context::Context;
 use node::{NativeComponent, NativeNode};
 pub use traits::*;
 
-pub struct NativeTree {
+pub struct NativeTree<'a> {
     nodes: HashMap<NodeID, NativeNode>,
     root: Option<NodeID>,
+    context: Option<&'a mut Context<'a>>,
 }
 
-unsafe impl Sync for NativeTree {}
-unsafe impl Send for NativeTree {}
+unsafe impl<'a> Sync for NativeTree<'a> {}
+unsafe impl<'a> Send for NativeTree<'a> {}
 
-impl NativeTree {
+impl<'a> NativeTree<'a> {
     /// should only be called from the main thread
-    pub(crate) fn get() -> &'static mut Self {
+    pub(crate) fn get<'b>(ctx: *mut Context<'b>) -> &'static mut Self {
         lazy_static::lazy_static! {
-            static ref NATIVE_TREE: NativeTree = NativeTree {
+            static ref NATIVE_TREE: NativeTree<'static> = NativeTree {
                 nodes: HashMap::new(),
-                root: None
+                root: None,
+                context: None,
             };
         };
+
         unsafe {
-            ((&*NATIVE_TREE) as *const NativeTree as *mut NativeTree)
+            let tree = ((&*NATIVE_TREE) as *const NativeTree<'static> as *mut NativeTree<'a>)
                 .as_mut()
+                .unwrap();
+
+            tree.context = Some((ctx as *mut Context<'a>).as_mut().unwrap());
+
+            return tree;
+        }
+    }
+
+    pub fn context(&self) -> &mut Context {
+        unsafe {
+            self.context
+                .as_ref()
+                .and_then(|s| {
+                    (s as *const &mut Context as *const *mut Context<'_>)
+                        .read()
+                        .as_mut()
+                })
                 .unwrap()
         }
     }
@@ -65,6 +87,20 @@ impl NativeTree {
         match self.nodes.get(&id) {
             Some(node) => {
                 if let NativeComponent::View(v) = node.component.as_ref() {
+                    return (node, &v);
+                } else {
+                    unreachable!()
+                }
+            }
+            None => unreachable!(),
+        }
+    }
+
+    /// aux function to get known view node
+    fn get_image_view(&self, id: NodeID) -> (&NativeNode, &NativeImageView) {
+        match self.nodes.get(&id) {
+            Some(node) => {
+                if let NativeComponent::ImageView(v) = node.component.as_ref() {
                     return (node, &v);
                 } else {
                     unreachable!()
@@ -144,7 +180,7 @@ impl NativeTree {
     }
 
     /// runs the command on the native tree
-    pub fn execute_commands(&mut self, commands: Vec<Command>) {
+    pub fn execute_commands(&mut self, context: &mut Context, commands: Vec<Command>) {
         for cmd in commands {
             // println!("{:?}", cmd);
             match cmd {
@@ -155,7 +191,7 @@ impl NativeTree {
                     let node = self.nodes.remove(&id).expect("invalid node");
 
                     // should retain if navigator or scroll view is valid
-                    if node.component.should_retain() {
+                    if node.component.should_retain(context) {
                         self.nodes.insert(id, node);
                     }
                 }
@@ -172,35 +208,38 @@ impl NativeTree {
                     self.nodes.insert(
                         id,
                         NativeNode::new(
-                            Arc::new(NativeComponent::Button(NativeButton::new())),
+                            Arc::new(NativeComponent::Button(NativeButton::new(context))),
                             style,
                         ),
                     );
                 }
                 Command::ButtonSetDisabled { id, disabled } => {
                     let (_node, b) = self.get_button(id);
-                    b.set_disabled(disabled);
+                    b.set_disabled(context, disabled);
                 }
                 Command::ButtonSetLabelText { id, label } => {
                     let (_node, b) = self.get_button(id);
-                    b.set_label(label)
+                    b.set_label(context, label)
                 }
                 Command::ButtonSetOnClick { id, on_click } => {
                     let (_node, b) = self.get_button(id);
-                    b.set_on_click(on_click);
+                    b.set_on_click(context, on_click);
                 }
 
                 Command::ViewCreate { id, style } => {
                     // create view node
                     self.nodes.insert(
                         id,
-                        NativeNode::new(Arc::new(NativeComponent::View(NativeView::new())), style),
+                        NativeNode::new(
+                            Arc::new(NativeComponent::View(NativeView::new(context))),
+                            style,
+                        ),
                     );
                 }
                 Command::ViewRemoveChild { id, child, index } => {
                     let (_node, view) = self.get_view(id);
                     let elem = self.nodes.get(&child).unwrap();
-                    view.remove_child(elem.component.widget());
+                    view.remove_child(context, elem.component.widget());
 
                     let node = self.nodes.get_mut(&id).expect("invalid node id");
                     node.children.remove(index);
@@ -212,7 +251,7 @@ impl NativeTree {
                     let (_node, view) = self.get_view(id);
                     let child_node = self.nodes.get(&child).unwrap();
 
-                    view.insert_child(index, child_node.component.widget());
+                    view.insert_child(context, index, child_node.component.widget());
 
                     let node = self.nodes.get_mut(&id).expect("invalid node");
 
@@ -226,21 +265,28 @@ impl NativeTree {
                     child_node.parent = Some(id);
                 }
 
-                Command::ImageViewCreate { id, style } => {
+                Command::ImageViewCreate { id, style, src } => {
                     self.nodes.insert(
                         id,
                         NativeNode::new(
-                            Arc::new(NativeComponent::ImageView(NativeImageView::new())),
+                            Arc::new(NativeComponent::ImageView(NativeImageView::new(
+                                context, src,
+                            ))),
                             style,
                         ),
                     );
+                }
+                Command::ImageViewSetSource { id, src } => {
+                    let (_node, view) = self.get_image_view(id);
+
+                    view.set_source(context, src);
                 }
 
                 Command::ScrollViewCreate { id, style } => {
                     self.nodes.insert(
                         id,
                         NativeNode::new(
-                            Arc::new(NativeComponent::ScrollView(NativeScrollView::new())),
+                            Arc::new(NativeComponent::ScrollView(NativeScrollView::new(context))),
                             style,
                         ),
                     );
@@ -248,7 +294,7 @@ impl NativeTree {
                 Command::ScrollViewRemoveChild { id } => {
                     let (_node, view) = self.get_scroll_view(id);
 
-                    view.remove_child();
+                    view.remove_child(context);
 
                     let node = self.nodes.get_mut(&id).expect("invalid node id");
                     node.children.clear();
@@ -264,7 +310,7 @@ impl NativeTree {
                     let child_node = self.nodes.get(&id).expect("invalid node id");
 
                     // set the child into view
-                    view.set_child(child_node.component().widget());
+                    view.set_child(context, child_node.component().widget());
 
                     // get the mutable child node
                     let child_node = self.nodes.get_mut(&id).expect("invalid node id");
@@ -286,35 +332,35 @@ impl NativeTree {
                     self.nodes.insert(
                         id,
                         NativeNode::new(
-                            Arc::new(NativeComponent::Text(NativeText::new(&text))),
+                            Arc::new(NativeComponent::Text(NativeText::new(context, &text))),
                             style,
                         ),
                     );
                 }
                 Command::TextSetText { id, text } => {
                     let (_node, t) = self.get_text(id);
-                    t.set_text(&text);
+                    t.set_text(context, &text);
                 }
                 Command::TextInputCreate { id, style } => {
                     // create the input node
                     self.nodes.insert(
                         id,
                         NativeNode::new(
-                            Arc::new(NativeComponent::TextInput(NativeTextInput::new())),
+                            Arc::new(NativeComponent::TextInput(NativeTextInput::new(context))),
                             style,
                         ),
                     );
                 }
                 Command::TextInputSetBGText { id, text } => {
                     let (_node, input) = self.get_text_input(id);
-                    input.set_background_text(&text);
+                    input.set_background_text(context, &text);
                 }
 
                 Command::TextEditCreate { id, style } => {
                     self.nodes.insert(
                         id,
                         NativeNode::new(
-                            Arc::new(NativeComponent::TextEdit(NativeTextEdit::new())),
+                            Arc::new(NativeComponent::TextEdit(NativeTextEdit::new(context))),
                             style,
                         ),
                     );
@@ -330,7 +376,7 @@ impl NativeTree {
                         id,
                         NativeNode::new(
                             Arc::new(NativeComponent::ListView(NativeListView::new(
-                                data, factory,
+                                context, data, factory,
                             ))),
                             style,
                         ),
@@ -346,6 +392,7 @@ impl NativeTree {
                         id,
                         NativeNode::new(
                             Arc::new(NativeComponent::StackNavigator(NativeStackNavigator::new(
+                                context,
                                 command_recv,
                             ))),
                             style,
@@ -356,6 +403,7 @@ impl NativeTree {
                     let (_node, nav) = self.get_stack_nav(id);
 
                     nav.add_child(
+                        context,
                         self.nodes.get(&child).unwrap().component.widget(),
                         &name,
                         child,
@@ -370,7 +418,7 @@ impl NativeTree {
                 Command::StackNavigatorRemoveChild { id, child, name } => {
                     let (_node, nav) = self.get_stack_nav(id);
 
-                    nav.remove_child(&name);
+                    nav.remove_child(context, &name);
 
                     let node = self.nodes.get_mut(&id).unwrap();
 

@@ -1,6 +1,7 @@
 use gtk4::prelude::*;
 
-use crate::native_tree::{MeasuredSize, NativeStyledElement, NativeViewImp};
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, MeasuredSize, NativeStyledElement, NativeViewImp};
 use crate::style::{
     BorderStyle, Colour, FontStyle, FontWeight, PointEvents, TextAlign, TextDecorationLine,
     TextTransform,
@@ -13,13 +14,13 @@ pub struct NativeView {
 }
 
 impl NativeViewImp for NativeView {
-    fn new() -> Self {
+    fn new(_ctx: &mut Context) -> Self {
         Self {
             fixed: gtk4::Fixed::new(),
         }
     }
 
-    fn insert_child(&self, index: usize, child: &dyn NativeElement) {
+    fn insert_child(&self, _ctx: &mut Context, index: usize, child: &dyn NativeElement) {
         let children = self.fixed.observe_children();
         if let Some(sibling) = children.item(index as u32) {
             let sibling = sibling.dynamic_cast_ref::<gtk4::Widget>().unwrap();
@@ -33,11 +34,19 @@ impl NativeViewImp for NativeView {
         }
     }
 
-    fn remove_child(&self, child: &dyn NativeElement) {
+    fn remove_child(&self, _ctx: &mut Context, child: &dyn NativeElement) {
         self.fixed.remove(child.as_gtk4_widget());
     }
 
-    fn layout_child(&self, child: &dyn NativeElement, x: f32, y: f32, width: f32, height: f32) {
+    fn layout_child(
+        &self,
+        _ctx: &mut Context,
+        child: &dyn NativeElement,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    ) {
         let w = child.as_gtk4_widget();
 
         self.fixed.move_(w, x as f64, y as f64);
@@ -53,26 +62,39 @@ impl NativeElement for NativeView {
 }
 
 impl NativeStyledElement for NativeView {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.fixed.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.fixed.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.fixed.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

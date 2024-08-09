@@ -3,7 +3,8 @@ use std::sync::Arc;
 use gtk4::prelude::*;
 use parking_lot::RwLock;
 
-use crate::native_tree::{MeasuredSize, NativeStyledElement, NativeTextEditImp};
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, MeasuredSize, NativeStyledElement, NativeTextEditImp};
 use crate::style::{
     BorderStyle, Colour, FontStyle, FontWeight, PointEvents, TextAlign, TextDecorationLine,
     TextTransform,
@@ -25,7 +26,7 @@ impl NativeElement for NativeTextEdit {
 }
 
 impl NativeTextEditImp for NativeTextEdit {
-    fn new() -> Self {
+    fn new(_ctx: &mut Context) -> Self {
         let buffer = gtk4::TextBuffer::new(None);
         let tag = buffer.create_tag(Some("default_style"), &[]).unwrap();
         buffer.apply_tag(&tag, &buffer.start_iter(), &buffer.end_iter());
@@ -61,32 +62,45 @@ impl NativeTextEditImp for NativeTextEdit {
             text_changed_callback,
         }
     }
-    fn set_on_text_changed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>) {
+    fn set_on_text_changed(&self, _ctx: &mut Context, callback: Arc<dyn Fn(&str) + Sync + Send>) {
         *self.text_changed_callback.write() = Some(callback)
     }
 }
 
 impl NativeStyledElement for NativeTextEdit {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.edit.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.edit.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.edit.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

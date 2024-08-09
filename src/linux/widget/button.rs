@@ -3,6 +3,8 @@ use std::sync::Arc;
 use gtk4::prelude::*;
 use parking_lot::RwLock;
 
+use crate::native_tree::context::Context;
+use crate::native_tree::AvalableSpace;
 use crate::native_tree::{
     traits::NativeButtonImp, MeasuredSize, NativeStyledElement, NativeTextImp,
 };
@@ -22,8 +24,8 @@ pub struct NativeButton {
 impl NativeButton {}
 
 impl NativeButtonImp for NativeButton {
-    fn new() -> Self {
-        let label = NativeText::new("");
+    fn new(_ctx: &mut Context) -> Self {
+        let label = NativeText::new(_ctx, "");
 
         let button_callback: Arc<RwLock<Option<Arc<dyn Fn() + Send + Sync>>>> =
             Arc::new(RwLock::new(None));
@@ -48,15 +50,15 @@ impl NativeButtonImp for NativeButton {
         }
     }
 
-    fn set_disabled(&self, disabled: bool) {
+    fn set_disabled(&self, _ctx: &mut Context, disabled: bool) {
         self.button.set_can_target(!disabled)
     }
 
-    fn set_label(&self, text: String) {
-        self.label.set_text(&text)
+    fn set_label(&self, _ctx: &mut Context, text: String) {
+        self.label.set_text(_ctx, &text)
     }
 
-    fn set_on_click(&self, on_click: Option<Arc<dyn Fn() + Send + Sync>>) {
+    fn set_on_click(&self, _ctx: &mut Context, on_click: Option<Arc<dyn Fn() + Send + Sync>>) {
         *self.callback.write() = on_click;
     }
 }
@@ -68,26 +70,39 @@ impl super::NativeElement for NativeButton {
 }
 
 impl NativeStyledElement for NativeButton {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.button.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.button.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.button.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

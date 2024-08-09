@@ -1,36 +1,25 @@
-use std::sync::Arc;
+use std::ops::Deref;
 
 use ui_native::style::{
-    AlignContent, AlignItems, Dimension, FlexDirection, MarginDimension, StyleSheet,
+    AlignContent, AlignItems, Dimension, FlexDirection, JustifyContent, MarginDimension, Style,
 };
-use ui_native::widget::{Button, Text, TextEdit, TextInput, View};
+use ui_native::widget::{Button, ImageView, Text, TextEdit, TextInput, View};
 use ui_native::AppBuilder;
 
-lazy_static::lazy_static! {
-    static ref MY_VIEW_STYLE: Arc<StyleSheet> = {
-        let style_sheet = Arc::new(StyleSheet::new());
+static MY_VIEW_STYLE: Style = Style {
+    flex_direction: FlexDirection::Column,
+    align_items: AlignItems::Centre,
+    align_content: AlignContent::Centre,
+    justify_items: AlignItems::Centre,
+    justify_content: JustifyContent::Center,
+    ..Style::DEFAULT
+};
 
-
-        style_sheet.set_flex_direction(FlexDirection::Column);
-        style_sheet.set_align_items(AlignItems::Centre);
-        style_sheet.set_align_content(AlignContent::Centre);
-        style_sheet.set_justify_items(AlignItems::Centre);
-
-        style_sheet.set_height(Dimension::Percent(1.0));
-        style_sheet.set_width(Dimension::Percent(1.0));
-
-        return style_sheet
-    };
-
-    static ref MY_INPUT_STYLE: Arc<StyleSheet> = {
-        let style_sheet = Arc::new(StyleSheet::new());
-
-        style_sheet.set_margin_top(MarginDimension::Points(20.0));
-        style_sheet.set_width(Dimension::Points(400.0));
-
-        return style_sheet
-    };
-}
+static MY_INPUT_STYLE: Style = Style {
+    margin_top: MarginDimension::Points(20.0),
+    width: Dimension::Points(400.0),
+    ..Style::DEFAULT
+};
 
 fn main() {
     let app = AppBuilder::new()
@@ -42,6 +31,8 @@ fn main() {
 
     app.launch(|| {
         let mut view = View::new();
+
+        view.set_style(&MY_VIEW_STYLE);
 
         let t1 = Text::new("hello world");
         let t2 = Text::new("hello world");
@@ -61,14 +52,19 @@ fn main() {
         view.add_child(
             TextInput::new()
                 .with_background_text("hello world")
-                .with_style(MY_INPUT_STYLE.clone()),
+                .with_style(&MY_INPUT_STYLE),
         );
         view.add_child(TextEdit::new());
 
-        view.set_style(MY_VIEW_STYLE.clone());
+        lazy_static::lazy_static! {
+            static ref IMAGE: image::RgbaImage = {
+                image::load_from_memory(include_bytes!("./ferris.png"))
+                .unwrap()
+                .into_rgba8()
+            };
+        }
 
-        //view.set_align_items(AlignItems::Centre);
-        //view.set_direction(FlexDirection::Row);
+        view.add_child(ImageView::new(IMAGE.deref()));
 
         return view;
     });

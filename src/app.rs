@@ -62,5 +62,8 @@ impl AppBuilder {
     }
 
     #[cfg(target_os = "android")]
-    pub fn build_android(self, app: AndroidApp) -> Result<App, ()> {}
+    pub fn build_android(self, app: android_activity::AndroidApp) -> Result<App, ()> {
+        let app = NativeApp::new(self, app);
+        Ok(App { app: app })
+    }
 }

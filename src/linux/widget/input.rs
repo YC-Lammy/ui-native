@@ -3,7 +3,8 @@ use std::sync::Arc;
 use gtk4::prelude::*;
 use parking_lot::RwLock;
 
-use crate::native_tree::{MeasuredSize, NativeStyledElement, NativeTextInputImp};
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, MeasuredSize, NativeStyledElement, NativeTextInputImp};
 use crate::style::{
     BorderStyle, Colour, FontStyle, FontWeight, PointEvents, TextAlign, TextDecorationLine,
     TextTransform,
@@ -37,7 +38,7 @@ impl NativeElement for NativeTextInput {
 }
 
 impl NativeTextInputImp for NativeTextInput {
-    fn new() -> Self {
+    fn new(_ctx: &mut Context) -> Self {
         let entry = gtk4::Entry::new();
         let text_changed_callback: Arc<RwLock<Option<Arc<dyn Fn(&str) + Sync + Send>>>> =
             Arc::new(RwLock::new(None));
@@ -70,38 +71,51 @@ impl NativeTextInputImp for NativeTextInput {
         }
     }
 
-    fn set_background_text(&self, text: &str) {
+    fn set_background_text(&self, _ctx: &mut Context, text: &str) {
         self.input.set_placeholder_text(Some(text))
     }
-    fn set_on_text_changed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>) {
+    fn set_on_text_changed(&self, _ctx: &mut Context, callback: Arc<dyn Fn(&str) + Sync + Send>) {
         *self.text_changed_callback.write() = Some(callback)
     }
-    fn set_on_enter_pressed(&self, callback: Arc<dyn Fn(&str) + Sync + Send>) {
+    fn set_on_enter_pressed(&self, _ctx: &mut Context, callback: Arc<dyn Fn(&str) + Sync + Send>) {
         *self.enter_callback.write() = Some(callback)
     }
 }
 
 impl NativeStyledElement for NativeTextInput {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.input.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.input.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.input.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

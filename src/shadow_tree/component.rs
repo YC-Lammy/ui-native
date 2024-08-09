@@ -3,7 +3,9 @@ use std::sync::Arc;
 use crossbeam_channel::Receiver;
 
 use crate::custom::CustomElementWrapper;
+use crate::image::ImageSource;
 use crate::style::StyleRef;
+use crate::util::Comparable;
 use crate::widget::flatlist::{ListViewDataSourceWrapper, ListViewWidgetFactoryWrapper};
 
 use super::NodeID;
@@ -15,11 +17,11 @@ pub struct ViewNode {
     pub children: Vec<CoreComponent>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Clone)]
 pub struct ImageViewNode {
     pub id: Option<NodeID>,
     pub style: StyleRef,
-    pub src: (),
+    pub src: Arc<Comparable<dyn ImageSource>>,
 }
 
 #[derive(Default, Clone)]

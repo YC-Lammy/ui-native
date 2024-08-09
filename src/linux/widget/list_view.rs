@@ -3,7 +3,8 @@ use std::sync::Arc;
 use glib::object::Cast;
 use gtk4::prelude::*;
 
-use crate::native_tree::{MeasuredSize, NativeListViewImp, NativeStyledElement};
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, MeasuredSize, NativeListViewImp, NativeStyledElement};
 use crate::style::{
     BorderStyle, Colour, FontStyle, FontWeight, PointEvents, TextAlign, TextDecorationLine,
     TextTransform,
@@ -26,6 +27,7 @@ impl super::NativeElement for NativeListView {
 
 impl NativeListViewImp for NativeListView {
     fn new(
+        _ctx: &mut Context,
         data: Arc<ListViewDataSourceWrapper>,
         render: Arc<ListViewWidgetFactoryWrapper>,
     ) -> Self {
@@ -63,8 +65,10 @@ impl NativeListViewImp for NativeListView {
                         }
                     };
 
+                    let mut ctx = Context::dummy();
+
                     // get the native tree
-                    let native_tree = crate::native_tree::NativeTree::get();
+                    let native_tree = crate::native_tree::NativeTree::get(&mut ctx);
 
                     // check if list item already has widget
                     if let Some(list_item_widget) = list_item.child() {
@@ -83,10 +87,11 @@ impl NativeListViewImp for NativeListView {
                         );
 
                         // run the tree
-                        native_tree.execute_commands(commands);
+                        native_tree.execute_commands(&mut ctx, commands);
 
                         // recalculate layout
                         native_tree.compute_layout(
+                            &mut ctx,
                             list_item_widget.width() as f64,
                             list_item_widget.height() as f64,
                         );
@@ -105,7 +110,7 @@ impl NativeListViewImp for NativeListView {
                             crate::shadow_tree::commit::commit_tree(&mut component, None);
 
                         // run the tree
-                        native_tree.execute_commands(commands);
+                        native_tree.execute_commands(&mut ctx, commands);
 
                         // get the root widget
                         let widget = native_tree.get_root_node().expect("expecting node");
@@ -134,26 +139,39 @@ impl NativeListViewImp for NativeListView {
 }
 
 impl NativeStyledElement for NativeListView {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.list.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.list.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.list.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

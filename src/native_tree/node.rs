@@ -8,6 +8,7 @@ use crate::imp::{
 use crate::shadow_tree::NodeID;
 use crate::style::StyleRef;
 
+use super::context::Context;
 use super::traits::*;
 
 pub enum NativeComponent {
@@ -42,18 +43,26 @@ impl NativeComponent {
         }
     }
 
-    pub fn should_retain(&self) -> bool {
+    pub fn should_retain(&self, context: &mut Context) -> bool {
         match self {
-            Self::StackNavigator(s) => s.should_retain(),
+            Self::StackNavigator(s) => s.should_retain(context),
             _ => false,
         }
     }
 
-    pub fn layout_child(&self, child: &NativeComponent, x: f32, y: f32, width: f32, height: f32) {
+    pub fn layout_child(
+        &self,
+        context: &mut Context,
+        child: &NativeComponent,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    ) {
         match self {
-            Self::View(v) => v.layout_child(child.widget(), x, y, width, height),
-            Self::ScrollView(s) => s.layout_child(child.widget(), x, y, width, height),
-            Self::StackNavigator(s) => s.layout_child(child.widget(), x, y, width, height),
+            Self::View(v) => v.layout_child(context, child.widget(), x, y, width, height),
+            Self::ScrollView(s) => s.layout_child(context, child.widget(), x, y, width, height),
+            Self::StackNavigator(s) => s.layout_child(context, child.widget(), x, y, width, height),
             _ => todo!(),
         }
     }

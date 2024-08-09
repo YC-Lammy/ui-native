@@ -1,15 +1,19 @@
+use std::sync::Arc;
+
 use gtk4::prelude::*;
 
-use crate::native_tree::{MeasuredSize, NativeImageViewImp, NativeStyledElement};
-use crate::style::{
-    BorderStyle, Colour, FontStyle, FontWeight, PointEvents, TextAlign, TextDecorationLine,
-    TextTransform,
-};
+use crate::image::ImageSource;
+use crate::native_tree::context::Context;
+use crate::native_tree::{AvalableSpace, MeasuredSize, NativeImageViewImp, NativeStyledElement};
+use crate::style::*;
+use crate::util::Comparable;
 
+use super::paintable::UINativeImage;
 use super::NativeElement;
 
 pub struct NativeImageView {
     view: gtk4::Picture,
+    image: UINativeImage,
 }
 
 impl NativeElement for NativeImageView {
@@ -19,35 +23,60 @@ impl NativeElement for NativeImageView {
 }
 
 impl NativeImageViewImp for NativeImageView {
-    fn new() -> Self {
+    fn new(_ctx: &mut Context, src: Arc<Comparable<dyn ImageSource>>) -> Self {
+        let picture = gtk4::Picture::new();
+        let image = UINativeImage::new(src);
+
+        picture.set_paintable(Some(&image));
+
         Self {
-            view: gtk4::Picture::new(),
+            view: picture,
+            image,
         }
     }
-    fn set_source(&self) {}
+    fn set_source(&self, _ctx: &mut Context, src: Arc<Comparable<dyn ImageSource>>) {
+        self.image.set_source(src);
+    }
+
+    fn check_update(&self) {
+        self.image.check_update();
+    }
 }
 
 impl NativeStyledElement for NativeImageView {
-    fn measure(&self, known_width: Option<f32>, known_height: Option<f32>) -> MeasuredSize {
+    fn measure(
+        &self,
+        _ctx: &mut Context,
+        known_width: AvalableSpace,
+        known_height: AvalableSpace,
+    ) -> anyhow::Result<MeasuredSize> {
         // measure width
         let (min_width, natural_width, _, _) = self.view.measure(
             gtk4::Orientation::Horizontal,
-            known_height.map(|i| i as i32).unwrap_or(-1),
+            match known_height {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
         // measure height
         let (min_height, natural_height, _, _) = self.view.measure(
             gtk4::Orientation::Vertical,
-            known_width.map(|i| i as i32).unwrap_or(-1),
+            match known_width {
+                AvalableSpace::AtMost(f) => f as i32,
+                AvalableSpace::Exact(f) => f as i32,
+                AvalableSpace::Unknown => -1,
+            },
         );
 
-        return MeasuredSize {
+        return Ok(MeasuredSize {
             min_width: min_width as f32,
             natural_width: natural_width as f32,
             min_height: min_height as f32,
             natural_height: natural_height as f32,
-        };
+        });
     }
-    fn set_visible(&self, visible: bool) {
+    fn set_visible(&self, _ctx: &mut Context, visible: bool) {
         self.view.set_visible(visible)
     }
     fn set_backface_visible(&self, _visible: bool) {}

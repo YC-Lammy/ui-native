@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use crossbeam_channel::Receiver;
 
+use crate::image::ImageSource;
 use crate::style::StyleRef;
+use crate::util::Comparable;
 use crate::widget::flatlist::ListViewWidgetFactoryWrapper;
 use crate::{custom::NativeCustomElement, widget::flatlist::ListViewDataSourceWrapper};
 
@@ -44,6 +46,11 @@ pub enum Command {
     ImageViewCreate {
         id: NodeID,
         style: StyleRef,
+        src: Arc<Comparable<dyn ImageSource>>,
+    },
+    ImageViewSetSource {
+        id: NodeID,
+        src: Arc<Comparable<dyn ImageSource>>,
     },
 
     ScrollViewCreate {

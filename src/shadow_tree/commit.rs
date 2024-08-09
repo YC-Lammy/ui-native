@@ -131,6 +131,13 @@ fn tree_generate_command(
                     style: v.style.clone(),
                 })
             }
+
+            if v.src.as_ref() != ov.src.as_ref() {
+                cmd.push(Command::ImageViewSetSource {
+                    id: v.id.unwrap(),
+                    src: v.src.clone(),
+                });
+            }
         }
         (CoreComponent::ImageView(v), old_component) => {
             // remove the old node
@@ -145,6 +152,7 @@ fn tree_generate_command(
             cmd.push(Command::ImageViewCreate {
                 id: v.id.unwrap(),
                 style: v.style.clone(),
+                src: v.src.clone(),
             });
         }
         (CoreComponent::ScrollView(v), Some(CoreComponent::ScrollView(ov))) => {
@@ -370,18 +378,30 @@ fn tree_generate_command(
                 style: t.style.clone(),
             });
         }
-        (CoreComponent::StackNavigator(s), Some(CoreComponent::StackNavigator(os))) => {
+        (CoreComponent::StackNavigator(s), old_component) => {
             // we handle stack navigator differently.
             // stack navigator has a unique id that is referenced by the reusable `StackNavigator`
 
             // if they do not have the same id, the new one must be added
-            if s.id != os.id {
-                cmd.push(Command::StackNavigatorCreate {
-                    id: s.id,
-                    style: s.style.clone(),
-                    command_recv: s.command_reciever.clone(),
-                });
-            } else {
+            let mut os = None;
+
+            if let Some(old_component) = old_component {
+                if let CoreComponent::StackNavigator(o) = old_component {
+                    if o.id == s.id {
+                        // only create a new stack navigator if it does not match
+                        os = Some(o);
+                    }
+                }
+
+                if os.is_none() {
+                    // remove the old node
+                    cmd.push(Command::RemoveNode {
+                        node: old_component.id().unwrap(),
+                    });
+                }
+            }
+
+            if let Some(os) = os {
                 // remove screens that are no longer in the navigator
                 for (i, name) in os.child_names.iter().enumerate() {
                     if !s.child_names.contains(name) {
@@ -441,30 +461,26 @@ fn tree_generate_command(
                         }
                     }
                 }
-            }
-        }
-        (CoreComponent::StackNavigator(s), old_component) => {
-            // remove the old node
-            if let Some(old) = old_component {
-                cmd.push(Command::RemoveNode {
-                    node: old.id().unwrap(),
-                });
-            }
-
-            cmd.push(Command::StackNavigatorCreate {
-                id: s.id,
-                style: s.style.clone(),
-                command_recv: s.command_reciever.clone(),
-            });
-
-            for (i, child) in s.children.iter_mut().enumerate() {
-                let child_id = tree_generate_command(child, None, cmd);
-
-                cmd.push(Command::StackNavigatorAddChild {
+            } else {
+                // create a new stack navigator
+                cmd.push(Command::StackNavigatorCreate {
                     id: s.id,
-                    child: child_id,
-                    name: s.child_names[i].clone(),
+                    style: s.style.clone(),
+                    command_recv: s.command_reciever.clone(),
                 });
+
+                // loop through all the child
+                for (i, child) in s.children.iter_mut().enumerate() {
+                    // generate command
+                    let child_id = tree_generate_command(child, None, cmd);
+
+                    // add child
+                    cmd.push(Command::StackNavigatorAddChild {
+                        id: s.id,
+                        child: child_id,
+                        name: s.child_names[i].clone(),
+                    });
+                }
             }
         }
         (CoreComponent::ListView(f), Some(CoreComponent::ListView(of))) => {

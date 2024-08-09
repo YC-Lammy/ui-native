@@ -3,7 +3,7 @@ use crate::style::{Style, StyleNode, StyleRef};
 
 use super::NativeTree;
 
-impl NativeTree {
+impl<'a> NativeTree<'a> {
     pub fn compute_style(&self) {
         if let Some(root) = self.root {
             // compute style for node and its children

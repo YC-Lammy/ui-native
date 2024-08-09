@@ -5,10 +5,10 @@ use crate::shadow_tree::component::{CoreComponent, NavigatorCommand, StackNaviga
 use crate::shadow_tree::NodeID;
 use crate::style::StyleRef;
 
-pub enum StackNavigatorTransition{
+pub enum StackNavigatorTransition {
     None,
     Fade,
-    Slide
+    Slide,
 }
 
 #[derive(Debug, Clone)]
