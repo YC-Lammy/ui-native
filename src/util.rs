@@ -41,21 +41,3 @@ impl<T: ?Sized> Comparable<T> {
         })
     }
 }
-
-#[test]
-fn test() {
-    let mut last = 0;
-
-    for i in 0..10 {
-        let r = 9;
-
-        let f = move || {
-            r;
-        };
-        let h = Comparable::<()>::hash(&f);
-
-        println!("{}", last == h);
-
-        last = h;
-    }
-}

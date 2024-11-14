@@ -182,6 +182,9 @@ impl GtkApp {
                 let window = window.borrow();
                 let window = window.as_ref().unwrap();
 
+                // check update
+                native_tree.check_update();
+
                 // recalculate layout
                 native_tree.compute_layout(
                     &mut Context::dummy(),

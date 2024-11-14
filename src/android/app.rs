@@ -113,6 +113,9 @@ impl NativeApp {
 
                     // execute the changes on the native tree
                     native_tree.execute_commands(&mut context, commands);
+                    // check update
+                    native_tree.check_update();
+                    
                     // compute the style of the components
                     native_tree.compute_style();
 

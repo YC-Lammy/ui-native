@@ -8,15 +8,18 @@ use crate::imp::{
 };
 use crate::shadow_tree::{command::Command, NodeID};
 
-pub mod context;
-pub mod layout;
-pub mod node;
-pub mod style;
-pub mod traits;
+pub(crate) mod context;
+pub(crate) mod layout;
+pub(crate) mod node;
+pub(crate) mod style;
+pub(crate) mod traits;
+pub(crate) mod update;
 
 use context::Context;
 use node::{NativeComponent, NativeNode};
-pub use traits::*;
+pub(crate) use traits::*;
+
+pub use traits::{AvalableSpace, MeasuredSize};
 
 pub struct NativeTree<'a> {
     nodes: HashMap<NodeID, NativeNode>,

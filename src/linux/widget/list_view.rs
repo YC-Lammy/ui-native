@@ -89,6 +89,9 @@ impl NativeListViewImp for NativeListView {
                         // run the tree
                         native_tree.execute_commands(&mut ctx, commands);
 
+                        // check update
+                        native_tree.check_update();
+
                         // recalculate layout
                         native_tree.compute_layout(
                             &mut ctx,
